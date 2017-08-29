@@ -50,7 +50,7 @@ std::vector<stoch_vol_datum> sample_theta_prior(const parameters& params,
       params.alpha_y +
       gsl_ran_gaussian(r, params.tau_y/sqrt(1.0 - params.theta_y*params.theta_y));
 
-    Theta.rho_tilde =
+    Theta.rho_tilde = logit( (0.6 + 1.0)/2.0 ) + 
       gsl_ran_gaussian(r, params.tau_rho);
 
     output[i] = Theta;
@@ -205,12 +205,16 @@ std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
     
     double likelihood = solver.numerical_likelihood(&gsl_x.vector,
 						    dx_likelihood);
+      std::cout << theta_t[i].log_sigma_x << " "
+		<< theta_t[i].log_sigma_y << " "
+		<< theta_t[i].rho_tilde << std::endl;
+
     if (likelihood > 0.0) {
       out[i] = log(likelihood);
-      printf("For rho=%f, data %d produces likelihood %f.\n", rho, i, likelihood);
+      printf("For rho=%f, data %d produces likelihood %f.\n", rho, i, out[i]);
     } else {
       out[i] = log(1e-16);
-      printf("For rho=%f, data %d produces neg likelihood.\n", rho, i);
+      printf("For rho=%f, data %d produces neg likelihood.\n", rho, i, out[i]);
     }
   }
 
@@ -428,7 +432,7 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
     } else {
       rho_tp1 = 0.7;
     }
-    rho_tp1 = 0.0;
+    rho_tp1 = 0.6;
     double rho_tilde_tp1 = logit( (rho_tp1 + 1.0)/2.0 );
     
     // rho_tilde_tp1 = rho_tilde_t + tau_rho*innovations[i-1,eta_rho]
