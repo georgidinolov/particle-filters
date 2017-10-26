@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   if (argc < 9 || argc > 9) {
     printf("You must provide input\n");
     printf("The input is: \n data file list (each file on new line); \noutput directory;\nrelative tolerance for function during mle estimation (as double); \ninitial guess for sigma_x; \ninitial guess for sigma_y; \ninitial guess for rho; \nfile name prefix; \nfile name suffix; \n");
-    printf("file names will be PREFIXmle-results-NUMBER_DATA_SET-order-ORDERSUFFIX.csv, stored in the output directory.\n");
+    printf("file names will be PREFIXmle-results-NUMBER_DATA_SET-order-ORDERSUFFIX.csv, stored in the output diectory.\n");
     exit(0);
   }
 
@@ -33,13 +33,15 @@ int main(int argc, char *argv[]) {
 
   params.alpha_x = alpha_hat + 1.0/2.0*log(Delta);
   params.alpha_y = alpha_hat + 1.0/2.0*log(Delta);
+  // params.alpha_x = 0;
+  // params.alpha_y = 0;
 
   params.theta_x = exp(-theta_hat * 1.0*Delta);
   params.theta_y = exp(-theta_hat * 1.0*Delta);
 
   params.tau_x = tau_hat * sqrt((1 - exp(-2*theta_hat*Delta))/(2*theta_hat));
   params.tau_y = tau_hat * sqrt((1 - exp(-2*theta_hat*Delta))/(2*theta_hat));
-  params.tau_rho = 0.01;
+  params.tau_rho = 0.1;
 
   params.leverage_x_rho = 0;
   params.leverage_y_rho = 0;
@@ -51,9 +53,9 @@ int main(int argc, char *argv[]) {
   generate_data(ys,
 		thetas,
 		params,
-		6.5*3600*10);
+		6.5*3600*1);
 
-  unsigned N_particles = 10;
+  unsigned N_particles = 20;
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
     log_weights[i] = 0.0;
@@ -65,7 +67,7 @@ int main(int argc, char *argv[]) {
   gsl_rng * r_ptr = gsl_rng_alloc(Type);
 
   long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  // seed = 10;
+  seed = 10;
   gsl_rng_set(r_ptr, seed);
   
   std::vector<stoch_vol_datum> theta_tm1 = sample_theta_prior(params,
@@ -84,15 +86,21 @@ int main(int argc, char *argv[]) {
 	      << "mean_log_sigma_y, var_log_sigma_y,"
 	      << "mean_rho_tilde, var_rho_tilde, NA\n";
 
-  double dx = 1.0/128.0;
-  double dx_likelihood = 1.0/128.0;
-  double rho_basis = 0.0;
-  double sigma = 0.3;
+  double dx = 1.0/350.0;
+  double dx_likelihood = 1.0/16.0;
+  double rho_basis = 0.6;
+  double sigma_x = 0.3;
+  double sigma_y = 0.1;
   double power = 1.0;
-  double std_dev_factor = 0.5;
+  double std_dev_factor = 1.0;
   
   BivariateGaussianKernelBasis basis_positive =
-    BivariateGaussianKernelBasis(dx, 0.6, sigma,power,std_dev_factor);
+    BivariateGaussianKernelBasis(dx,
+				 rho_basis,
+				 sigma_x,
+				 sigma_y,
+				 power,
+				 std_dev_factor);
 
     // BivariateGaussianKernelBasis basis_negative =
     // BivariateGaussianKernelBasis(dx, -0.6, sigma,power,std_dev_factor);
@@ -129,11 +137,6 @@ int main(int argc, char *argv[]) {
 				       log_weights[*max_index_ptr]) );
     }
 
-    for (double prob : probs) {
-      std::cout << prob << " ";
-    }
-    std::cout << std::endl;
-    
     gsl_ran_discrete_t * particle_sampler = gsl_ran_discrete_preproc(N_particles,
 								     probs);
     for (unsigned m=0; m<N_particles; ++m) {
@@ -145,24 +148,27 @@ int main(int argc, char *argv[]) {
 				params,
 				r_ptr);
 
-      double ll_for_sample = log_likelihood_OCHL(y_t,
+      double log_new_weight = 0.0;
+      if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
+	log_new_weight = log(1e-32);
+      } else {
+	double ll_for_sample = log_likelihood_OCHL(y_t,
 						 y_tm1,
 						 theta_t[m],
 						 params,
 						 &basis_positive,
 						 dx,
 						 dx_likelihood);
-      
-      double log_new_weight =
-	ll_for_sample -
-	lls[k];
+	log_new_weight =
+	  ll_for_sample - 
+	  lls[k];
+      }
+
       std::cout << "on likelihood " << k << ": "
 		<< theta_t[m].log_sigma_x << " "
       		<< theta_t[m].log_sigma_y << " "
       		<< theta_t[m].rho_tilde << " "
-      		<< log_new_weight << " "
-		<< ll_for_sample << " "
-		<< lls[k] << " "
+      		<< log_new_weight
 		<< std::endl;
 	// log_likelihood_OCHL(y_t,
 	// 		    y_tm1,

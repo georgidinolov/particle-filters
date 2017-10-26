@@ -203,18 +203,38 @@ std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
     x[0] = y_t.x_t;
     x[1] = y_t.y_t;
     
-    double likelihood = solver.numerical_likelihood(&gsl_x.vector,
-						    dx_likelihood);
+    double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
+							     dx_likelihood);
       std::cout << theta_t[i].log_sigma_x << " "
 		<< theta_t[i].log_sigma_y << " "
 		<< theta_t[i].rho_tilde << std::endl;
 
-    if (likelihood > 0.0) {
+    if (likelihood > 0.0 & likelihood < HUGE_VAL) {
       out[i] = log(likelihood);
       printf("For rho=%f, data %d produces likelihood %f.\n", rho, i, out[i]);
+      printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
+	     sigma_x,
+	     sigma_y,
+	     rho,
+	     y_t.a_x - y_t.x_tm1,
+	     y_t.x_t - y_t.x_tm1,
+	     y_t.b_x - y_t.x_tm1,
+	     y_t.a_y - y_t.y_tm1,
+	     y_t.y_t - y_t.y_tm1,
+	     y_t.b_y - y_t.y_tm1);
     } else {
       out[i] = log(1e-16);
       printf("For rho=%f, data %d produces neg likelihood.\n", rho, i, out[i]);
+      printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
+	     sigma_x,
+	     sigma_y,
+	     rho,
+	     y_t.a_x - y_t.x_tm1,
+	     y_t.x_t - y_t.x_tm1,
+	     y_t.b_x - y_t.x_tm1,
+	     y_t.a_y - y_t.y_tm1,
+	     y_t.y_t - y_t.y_tm1,
+	     y_t.b_y - y_t.y_tm1);
     }
   }
 
@@ -255,8 +275,8 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   x[0] = y_t.x_t;
   x[1] = y_t.y_t;
   
-  double likelihood = solver.numerical_likelihood(&gsl_x.vector,
-						  dx_likelihood);
+  double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
+							   dx_likelihood);
   if (likelihood > 0.0) {
     out = log(likelihood);
   } else {
@@ -389,8 +409,9 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
 
 
   // FIRST ROW
-  output << "x, y, log.sigma.x, log.sigma.y, rho.tilde \n";
-  output << x_t << "," << y_t << ","
+  output << "ax, x, bx, ay, y, by, log.sigma.x, log.sigma.y, rho.tilde \n";
+  output << "NA" << "," << x_t << "," << "NA" << ","
+	 << "NA" << "," << y_t << "," << "NA" << ","
 	 << log_sigma_x_t << ","
 	 << log_sigma_y_t << ","
 	 << rho_tilde_t << "\n";
@@ -473,7 +494,8 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
     rho_tilde_t = rho_tilde_tp1;
     rho_t = rho_tp1;
 
-    output << x_t << "," << y_t << ","
+    output << ys[i].a_x << "," << x_t << "," << ys[i].b_x << ","
+	   << ys[i].a_y << "," << y_t << "," << ys[i].b_y << ","
 	   << log_sigma_x_t << ","
 	   << log_sigma_y_t << ","
 	   << rho_tilde_t << "\n";
