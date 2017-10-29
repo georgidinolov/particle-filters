@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
     
     t1 = std::chrono::high_resolution_clock::now();
     unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(lls, theta_t, theta_tm1, N_particles, ks, r_ptr, log_weights) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
+#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights) firstprivate(y_t, y_tm1, params, dx, dx_likelihood, theta_tm1, theta_t)
     {
 #pragma omp for
       for (m=0; m<N_particles; ++m) {
