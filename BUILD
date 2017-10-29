@@ -5,8 +5,9 @@ cc_binary(
 	copts = ["-Isrc/multivariate-normal",
 	      	 "-Isrc/finite-element-igraph",
 		 "-Isrc/igraph-0.7.1/include",
+		 "-fopenmp",
 		 "-O3"],
-	linkopts = ["-lm", "-lgsl", "-lgslcblas"],		 
+	linkopts = ["-lm", "-lgsl", "-lgslcblas", "-fopenmp"],		 
 )
 
 cc_library(

@@ -187,31 +187,36 @@ std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
     double sigma_y = exp(theta_t[i].log_sigma_y);
     double rho = logit_inv(theta_t[i].rho_tilde)*2-1;
 
+    double Lx = y_t.b_x - y_t.a_x;
+    double Ly = y_t.b_y - y_t.a_y;
+    
     BivariateSolver solver = BivariateSolver(basis,
-					     sigma_x,
-					     sigma_y,
+					     sigma_x/Lx,
+					     sigma_y/Ly,
 					     rho,
-					     y_t.a_x,
-					     y_t.x_tm1,
-					     y_t.b_x,
-					     y_t.a_y,
-					     y_t.y_tm1,
-					     y_t.b_y,
+					     y_t.a_x/Lx,
+					     y_t.x_tm1/Lx,
+					     y_t.b_x/Lx,
+					     y_t.a_y/Ly,
+					     y_t.y_tm1/Ly,
+					     y_t.b_y/Ly,
 					     1.0,
 					     dx);
 
-    x[0] = y_t.x_t;
-    x[1] = y_t.y_t;
+    x[0] = y_t.x_t / Lx;
+    x[1] = y_t.y_t / Ly;
     
     double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							     dx_likelihood);
-      std::cout << theta_t[i].log_sigma_x << " "
-		<< theta_t[i].log_sigma_y << " "
-		<< theta_t[i].rho_tilde << std::endl;
+    likelihood = likelihood/( std::pow(Lx, 3) * std::pow(Ly, 3) );
 
-    if (likelihood > 0.0 & likelihood < HUGE_VAL) {
+    std::cout << theta_t[i].log_sigma_x << " "
+	      << theta_t[i].log_sigma_y << " "
+	      << theta_t[i].rho_tilde << std::endl;
+
+    if (!std::signbit(likelihood)) {
       out[i] = log(likelihood);
-      printf("For rho=%f, data %d produces likelihood %f.\n", rho, i, out[i]);
+      printf("\nFor rho=%f, data %d produces likelihood %f.\n", rho, i, out[i]);
       printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
 	     sigma_x,
 	     sigma_y,
@@ -224,7 +229,7 @@ std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
 	     y_t.b_y - y_t.y_tm1);
     } else {
       out[i] = log(1e-16);
-      printf("For rho=%f, data %d produces neg likelihood.\n", rho, i, out[i]);
+      printf("\nFor rho=%f, data %d produces neg likelihood.\n", rho, i);
       printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
 	     sigma_x,
 	     sigma_y,
@@ -258,28 +263,55 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   double sigma_x = exp(theta_t.log_sigma_x);
   double sigma_y = exp(theta_t.log_sigma_y);
   double rho = logit_inv(theta_t.rho_tilde)*2-1;
+
+  double Lx = y_t.b_x - y_t.a_x;
+  double Ly = y_t.b_y - y_t.a_y;
   
   BivariateSolver solver = BivariateSolver(basis,
-					   sigma_x,
-					   sigma_y,
+					   sigma_x/Lx,
+					   sigma_y/Lx,
 					   rho,
-					   y_t.a_x,
-					   y_t.x_tm1,
-					   y_t.b_x,
-					   y_t.a_y,
-					   y_t.y_tm1,
-					   y_t.b_y,
+					   y_t.a_x/Lx,
+					   y_t.x_tm1/Lx,
+					   y_t.b_x/Lx,
+					   y_t.a_y/Ly,
+					   y_t.y_tm1/Ly,
+					   y_t.b_y/Ly,
 					   1.0,
 					   dx);
   
-  x[0] = y_t.x_t;
-  x[1] = y_t.y_t;
+  x[0] = y_t.x_t/Lx;
+  x[1] = y_t.y_t/Ly;
   
   double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							   dx_likelihood);
-  if (likelihood > 0.0) {
+  likelihood = likelihood / (std::pow(Lx,3) * std::pow(Ly,3));
+  if (!std::signbit(likelihood)) {
+    // printf("\nFor rho=%f, data produces likelihood %f.\n", rho, likelihood);
+    // printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
+    // 	   sigma_x,
+    // 	   sigma_y,
+    // 	   rho,
+    // 	   y_t.a_x - y_t.x_tm1,
+    // 	   y_t.x_t - y_t.x_tm1,
+    // 	   y_t.b_x - y_t.x_tm1,
+    // 	   y_t.a_y - y_t.y_tm1,
+    // 	   y_t.y_t - y_t.y_tm1,
+    // 	   y_t.b_y - y_t.y_tm1);
+    
     out = log(likelihood);
   } else {
+    // printf("\nFor rho=%f, data produces neg likelihood.\n", rho);
+    // printf("sigma_x=%f; sigma_y=%f; rho=%f; ax=%f; x_T=%f; bx=%f; ay=%f; y_T=%f; by=%f;\n",
+    // 	   sigma_x,
+    // 	   sigma_y,
+    // 	   rho,
+    // 	   y_t.a_x - y_t.x_tm1,
+    // 	   y_t.x_t - y_t.x_tm1,
+    // 	   y_t.b_x - y_t.x_tm1,
+    // 	   y_t.a_y - y_t.y_tm1,
+    // 	   y_t.y_t - y_t.y_tm1,
+    // 	   y_t.b_y - y_t.y_tm1);
     out = log(1e-16);
   }
   return out;

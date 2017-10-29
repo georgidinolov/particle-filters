@@ -1,14 +1,15 @@
 library("data.table");
 
-sim.data <- fread(input = "data.csv",
+sim.data <- fread(input = "data-ochl.csv",
                   header = TRUE,
                   sep = ",")
 sample.data <- sim.data;
 
-post.mean <- fread(input = "inference.csv",
+post.mean <- fread(input = "inference-ochl.csv",
                    header = TRUE,
                    sep = ",")
 
+pdf("ochl.pdf")
 par(mfrow=c(3,2))
 plot(sim.data[, x], type = "l")
 plot(sim.data[, y], type = "l")
@@ -42,3 +43,4 @@ lines(post.mean[, mean_rho_tilde] - 2*sqrt(post.mean[, var_rho_tilde]),
       col="blue", lty = "dashed")
 lines(post.mean[, mean_rho_tilde] + 2*sqrt(post.mean[, var_rho_tilde]),
       col="blue", lty = "dashed")
+dev.off();
