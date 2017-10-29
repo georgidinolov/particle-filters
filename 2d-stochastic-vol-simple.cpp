@@ -29,8 +29,6 @@ int main(int argc, char *argv[]) {
   static BivariateGaussianKernelBasis* private_bases;
 #pragma omp threadprivate(private_bases)
   
-  unsigned n_threads = 3;
-  
   long unsigned T = 1 * 100 * 6.5 * 3600 * 1000; // number days in ms
   long unsigned Delta = 1 * 6.5*3600*1000; // one day in ms
   
@@ -68,7 +66,7 @@ int main(int argc, char *argv[]) {
 		params,
 		6.5*3600*1);
 
-  unsigned N_particles = 1000;
+  unsigned N_particles = 100;
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
     log_weights[i] = 0.0;
@@ -100,7 +98,7 @@ int main(int argc, char *argv[]) {
 	      << "mean_rho_tilde, var_rho_tilde, NA\n";
 
   double dx = 1.0/300.0;
-  double dx_likelihood = 1.0/32.0;
+  double dx_likelihood = 1.0/16.0;
   double rho_basis = 0.6;
   double sigma_x = 0.3;
   double sigma_y = 0.1;
@@ -120,7 +118,6 @@ int main(int argc, char *argv[]) {
   unsigned i = 0;
   
   std::cout << "copying bases vectors for threads as private variables" << std::endl;
-  omp_set_num_threads(n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
 
   #pragma omp parallel default(none) private(tid, i) shared(basis_positive)
