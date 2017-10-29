@@ -1,6 +1,6 @@
 library("data.table");
 
-sim.data <- fread(input = "data-ochl.csv",
+sim.data <- fread(input = "data.csv",
                   header = TRUE,
                   sep = ",")
 sample.data <- sim.data;
@@ -44,5 +44,5 @@ lines(post.mean[, mean_rho_tilde],
 lines(post.mean[, mean_rho_tilde] - 2*sqrt(post.mean[, var_rho_tilde]),
       col="blue", lty = "dashed")
 lines(post.mean[, mean_rho_tilde] + 2*sqrt(post.mean[, var_rho_tilde]),
-      col="blue", lty = "dashed")
+      col="blue", lty = "dashed") 
 dev.off();
