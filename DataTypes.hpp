@@ -91,4 +91,5 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
 void generate_data(std::vector<observable_datum>& ys,
  		   std::vector<stoch_vol_datum>& thetas,
 		   const parameters& params,
-		   unsigned order);
+		   unsigned order,
+		   long unsigned seed);

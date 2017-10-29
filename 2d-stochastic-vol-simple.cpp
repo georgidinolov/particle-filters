@@ -14,13 +14,21 @@
 
 
 int main(int argc, char *argv[]) {
-  if (argc < 9 || argc > 9) {
+  if (argc < 8 || argc > 8) {
     printf("You must provide input\n");
-    printf("The input is: \n data file list (each file on new line); \noutput directory;\nrelative tolerance for function during mle estimation (as double); \ninitial guess for sigma_x; \ninitial guess for sigma_y; \ninitial guess for rho; \nfile name prefix; \nfile name suffix; \n");
-    printf("file names will be PREFIXmle-results-NUMBER_DATA_SET-order-ORDERSUFFIX.csv, stored in the output diectory.\n");
+    printf("The input is: \noutput file;\nnumber particles to be used; \ndx_likelihood; \nrho_basis; \nsigma_x for basis; \nsigma_y for basis; \nnumber data points \n");
+    printf("It is wise to include the parameter values in the file name. We are using a fixed random seed.\n");
     exit(0);
   }
 
+  std::string output_file = argv[1];
+  unsigned N_particles = std::stoi(argv[2]);
+  double dx_likelihood = std::stod(argv[3]);
+  double rho_basis = std::stod(argv[4]);
+  double sigma_x = std::stod(argv[5]);
+  double sigma_y = std::stod(argv[6]);
+  int number_data_points = std::stod(argv[7]);
+  
   omp_set_dynamic(0);
 
   static int counter = 0;
@@ -29,7 +37,7 @@ int main(int argc, char *argv[]) {
   static BivariateGaussianKernelBasis* private_bases;
 #pragma omp threadprivate(private_bases)
   
-  long unsigned T = 1 * 100 * 6.5 * 3600 * 1000; // number days in ms
+  long unsigned T = 1 * number_data_points * 6.5 * 3600 * 1000; // number days in ms
   long unsigned Delta = 1 * 6.5*3600*1000; // one day in ms
   
   // Values taken from the microstructure paper
@@ -60,13 +68,16 @@ int main(int argc, char *argv[]) {
   unsigned N = T/Delta;
   std::vector<observable_datum> ys (N);
   std::vector<stoch_vol_datum> thetas (N);
+
+  long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  seed = 10;
   
   generate_data(ys,
 		thetas,
 		params,
-		6.5*3600*1);
+		6.5*3600*1,
+		seed);
 
-  unsigned N_particles = 100;
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
     log_weights[i] = 0.0;
@@ -76,9 +87,6 @@ int main(int argc, char *argv[]) {
   gsl_rng_env_setup();
   Type = gsl_rng_default;
   gsl_rng * r_ptr = gsl_rng_alloc(Type);
-
-  long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  seed = 10;
   gsl_rng_set(r_ptr, seed);
   
   std::vector<stoch_vol_datum> theta_tm1 = sample_theta_prior(params,
@@ -92,16 +100,12 @@ int main(int argc, char *argv[]) {
   std::iota(std::begin(particle_indeces), std::end(particle_indeces), 0);
 
   std::ofstream mean_levels;
-  mean_levels.open("inference.csv");
+  mean_levels.open(output_file);
   mean_levels << "mean_log_sigma_x, var_log_sigma_x,"
 	      << "mean_log_sigma_y, var_log_sigma_y,"
 	      << "mean_rho_tilde, var_rho_tilde, NA\n";
 
   double dx = 1.0/300.0;
-  double dx_likelihood = 1.0/16.0;
-  double rho_basis = 0.6;
-  double sigma_x = 0.3;
-  double sigma_y = 0.1;
   double power = 1.0;
   double std_dev_factor = 1.0;
   
@@ -155,10 +159,9 @@ int main(int argc, char *argv[]) {
     {
 #pragma omp for
       for (i=0; i<N_particles; ++i) {
-	stoch_vol_datum thetum = theta_t[i];
 	double likelihood = log_likelihood_OCHL(y_t,
 						y_tm1,
-						thetum,
+						theta_t[i],
 						params,
 						private_bases,
 						dx,
@@ -233,7 +236,12 @@ int main(int argc, char *argv[]) {
 	    lls[k];
 	}
 	
-	printf("on likelihood %d\n",k);
+	printf("on likelihood %d: sigma_x = %f, sigma_y = %f, rho = %f, log_new_weight = %f\n",
+	       k,
+	       exp(theta_t[m].log_sigma_x),
+	       exp(theta_t[m].log_sigma_y),
+	       exp(theta_t[m].rho_tilde)/(exp(theta_t[m].rho_tilde) + 1)*2.0-1.0,
+	       log_new_weight);
 	log_weights[m] = log_new_weight;
       }
     }

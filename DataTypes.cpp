@@ -409,7 +409,8 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
  void generate_data(std::vector<observable_datum>& ys,
 		    std::vector<stoch_vol_datum>& thetas,
 		    const parameters& params,
-		    unsigned order)
+		    unsigned order,
+		    long unsigned seed)
  {
    std::ofstream output;
    output.open("data.csv");
@@ -469,6 +470,7 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
   gsl_rng_env_setup();
   Type = gsl_rng_default;
   gsl_rng * r_ptr = gsl_rng_alloc(Type);
+  gsl_rng_set(r_ptr, seed);
   
   for (unsigned i=0; i<N; ++i) {
     double log_sigma_x_tp1 = params.alpha_x +

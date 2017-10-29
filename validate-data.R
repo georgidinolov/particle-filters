@@ -24,8 +24,10 @@ lines(post.mean[, mean_log_sigma_x] + 2*sqrt(post.mean[, var_log_sigma_x]),
       col="blue", lty = "dashed")
 ##
 plot(sim.data[, log.sigma.y], type = "l",
-          ylim = c(min(post.mean[, mean_log_sigma_y] - 2*sqrt(post.mean[, var_log_sigma_y])),
-              max(post.mean[, mean_log_sigma_y] + 2*sqrt(post.mean[, var_log_sigma_y])) ))
+     ylim = c(min(c(min(post.mean[, mean_log_sigma_y] - 2*sqrt(post.mean[, var_log_sigma_y])),
+                    min(sample.data[, log.sigma.y]))),
+              max(c(max(post.mean[, mean_log_sigma_y] + 2*sqrt(post.mean[, var_log_sigma_y])),
+                    max(sample.data[, log.sigma.y])))));
 lines(post.mean[, mean_log_sigma_y], col = "blue")
 lines(post.mean[, mean_log_sigma_y] - 2*sqrt(post.mean[, var_log_sigma_y]),
       col="blue", lty = "dashed")
