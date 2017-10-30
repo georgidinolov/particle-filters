@@ -1,11 +1,11 @@
 library("data.table");
 
-sim.data <- fread(input = "data.csv",
+sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
                   sep = ",")
 sample.data <- sim.data;
 
-post.mean <- fread(input = "inference-ochl.csv",
+post.mean <- fread(input = "../../inference-ochl-sigma_x-0.3-sigma_y-0.2-rho-0.0-dx-like-0.1.csv",
                    header = TRUE,
                    sep = ",")
 

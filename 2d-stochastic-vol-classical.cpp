@@ -109,36 +109,10 @@ int main(int argc, char *argv[]) {
   double power = 1.0;
   double std_dev_factor = 1.0;
   
-  BivariateGaussianKernelBasis basis_positive =
-    BivariateGaussianKernelBasis(dx,
-				 rho_basis,
-				 sigma_x,
-				 sigma_y,
-				 power,
-				 std_dev_factor);
 
-  // BASES COPY FOR THREADS START
   int tid = 0;
   unsigned i = 0;
   
-  std::cout << "copying bases vectors for threads as private variables" << std::endl;
-  auto t1 = std::chrono::high_resolution_clock::now();
-
-  #pragma omp parallel default(none) private(tid, i) shared(basis_positive)
-  {
-    tid = omp_get_thread_num();
-    
-    private_bases = new BivariateGaussianKernelBasis();
-    (*private_bases) = basis_positive;
-
-    printf("Thread %d: counter %d\n", tid, counter);
-  }
-  auto t2 = std::chrono::high_resolution_clock::now();    
-  std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
-  std::cout << "DONE copying bases vectors for threads as private variables" << std::endl;
-  std::cout << std::endl;
-  // BAsES COPY FOR THREADS END
-
   // BivariateGaussianKernelBasis basis_negative =
   // BivariateGaussianKernelBasis(dx, -0.6, sigma,power,std_dev_factor);
   
@@ -154,18 +128,16 @@ int main(int argc, char *argv[]) {
     
     std::vector<double> lls (N_particles);
     
-    t1 = std::chrono::high_resolution_clock::now();
+    auto t1 = std::chrono::high_resolution_clock::now();
 #pragma omp parallel default(none) private(i) shared(lls, theta_t, N_particles) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
     {
 #pragma omp for
       for (i=0; i<N_particles; ++i) {
-	double likelihood = log_likelihood_OCHL(y_t,
-						y_tm1,
-						theta_t[i],
-						params,
-						private_bases,
-						dx,
-						dx_likelihood);
+	double likelihood = log_likelihood(y_t,
+					   y_tm1,
+					   theta_t[i],
+					   params);
+					 
 	lls[i] = likelihood;
 	printf("Thread %d with address %p produces likelihood %f where &params=%p\n",
 	       omp_get_thread_num(),
@@ -174,7 +146,7 @@ int main(int argc, char *argv[]) {
 	       &params);
       }
     }
-    t2 = std::chrono::high_resolution_clock::now();    
+    auto t2 = std::chrono::high_resolution_clock::now();    
     std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
 	      << " milliseconds" << std::endl;
     
@@ -207,7 +179,7 @@ int main(int argc, char *argv[]) {
     
     t1 = std::chrono::high_resolution_clock::now();
     unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
+#pragma omp parallel default(none) private(m) shared(lls, theta_t, N_particles, ks, r_ptr, log_weights) firstprivate(y_t, y_tm1, params, dx, dx_likelihood, theta_tm1)
     {
 #pragma omp for
       for (m=0; m<N_particles; ++m) {
@@ -224,13 +196,11 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  double ll_for_sample = log_likelihood_OCHL(y_t,
-						     y_tm1,
-						     theta_t[m],
-						     params,
-						     private_bases,
-						     dx,
-						     dx_likelihood);
+	  double ll_for_sample = log_likelihood(y_t,
+						y_tm1,
+						theta_t[m],
+						params);
+					
 	  log_new_weight =
 	    ll_for_sample - 
 	    lls[k];

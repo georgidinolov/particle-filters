@@ -10,6 +10,18 @@ cc_binary(
 	linkopts = ["-lm", "-lgsl", "-lgslcblas", "-fopenmp"],		 
 )
 
+cc_binary(
+	name = "2d-stochastic-vol-classical",
+	srcs = ["2d-stochastic-vol-classical.cpp"],
+	deps = [":DataTypes"],
+	copts = ["-Isrc/multivariate-normal",
+	      	 "-Isrc/finite-element-igraph",
+		 "-Isrc/igraph-0.7.1/include",
+		 "-fopenmp",
+		 "-O3"],
+	linkopts = ["-lm", "-lgsl", "-lgslcblas", "-fopenmp"],		 
+)
+
 cc_library(
 	name = "DataTypes",
 	hdrs = ["DataTypes.hpp"],
