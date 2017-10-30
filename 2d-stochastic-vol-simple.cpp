@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 	      << "mean_log_sigma_y, var_log_sigma_y,"
 	      << "mean_rho_tilde, var_rho_tilde, NA\n";
 
-  double dx = 1.0/300.0;
+  double dx = 1.0/400.0;
   double power = 1.0;
   double std_dev_factor = 1.0;
   
