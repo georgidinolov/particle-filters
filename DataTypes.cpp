@@ -285,6 +285,10 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   
   double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							   dx_likelihood);
+  if ( likelihood >= 1e2 ) {
+    printf("\nLikelihood for point abnormally large\n");
+  }
+  
   likelihood = likelihood / (std::pow(Lx,3) * std::pow(Ly,3));
   if (!std::signbit(likelihood)) {
     // printf("\nFor rho=%f, data produces likelihood %f.\n", rho, likelihood);
@@ -312,7 +316,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
     // 	   y_t.a_y - y_t.y_tm1,
     // 	   y_t.y_t - y_t.y_tm1,
     // 	   y_t.b_y - y_t.y_tm1);
-    out = log(1e-16);
+    out = log(1e-32);
   }
   return out;
 }
