@@ -1,15 +1,16 @@
 library("data.table");
+file.name = "inference-ochl-sigma_x-0.15-sigma_y-0.15-rho-0.5-dx-0.125-nparticles-100"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
-                  sep = ",")
+                  sep = ",");
 sample.data <- sim.data;
 
-post.mean <- fread(input = "../../inference-ochl-sigma_x-0.3-sigma_y-0.3-rho-0-dx-0.125-nparticles-100.csv",
+post.mean <- fread(input = paste("../../", file.name, ".csv", sep=""),
                    header = TRUE,
-                   sep = ",")
+                   sep = ",");
 
-pdf("ochl.pdf")
+pdf(paste(file.name, ".pdf", sep=""));
 par(mfrow=c(3,2))
 plot(sim.data[, x], type = "l")
 plot(sim.data[, y], type = "l")
