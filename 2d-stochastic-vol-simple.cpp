@@ -14,20 +14,30 @@
 
 
 int main(int argc, char *argv[]) {
-  if (argc < 8 || argc > 8) {
+  if (argc < 9 || argc > 9) {
     printf("You must provide input\n");
-    printf("The input is: \noutput file;\nnumber particles to be used; \ndx_likelihood; \nrho_basis; \nsigma_x for basis; \nsigma_y for basis; \nnumber data points \n");
+    printf("The input is: \n\noutput file prefix;\nnumber particles to be used; \ndx_likelihood; \nrho_basis; \nsigma_x for basis; \nsigma_y for basis; \nnumber data points; \noutput file suffix \n");
     printf("It is wise to include the parameter values in the file name. We are using a fixed random seed.\n");
     exit(0);
   }
 
-  std::string output_file = argv[1];
+  std::string output_file_PREFIX = argv[1];
   unsigned N_particles = std::stoi(argv[2]);
   double dx_likelihood = std::stod(argv[3]);
   double rho_basis = std::stod(argv[4]);
   double sigma_x = std::stod(argv[5]);
   double sigma_y = std::stod(argv[6]);
   int number_data_points = std::stod(argv[7]);
+
+  std::string output_file = output_file_PREFIX + 
+    "-sigma_x-" + argv[5] + 
+    "-sigma_y-" + argv[6] + 
+    "-rho-" + argv[4] + 
+    "-dx-likelihood-" + std::to_string(dx_likelihood) +
+    "-nparticles-" + argv[2] + "-" +
+    argv[8] + ".csv";
+
+  std::cout << "output_file = " << output_file << std::endl;
   
   omp_set_dynamic(0);
 

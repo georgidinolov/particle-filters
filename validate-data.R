@@ -1,5 +1,5 @@
 library("data.table");
-file.name = "inference-ochl-sigma_x-0.30-sigma_y-0.07-rho-0-dx-1-over-512-nparticles-100"
+file.name = "inference-ochl-sigma_x-0.30-sigma_y-0.30-rho-0.0-dx-likelihood-0.003900-nparticles-100-new-layout-old-bounds"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
