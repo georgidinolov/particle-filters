@@ -4,6 +4,7 @@
 #include <gsl/gsl_vector.h>
 #include <iostream>
 #include <fstream>
+#include <limits>
 
 double logit(double p) {
   return (log(p/(1.0-p)));
@@ -285,7 +286,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   
   double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							   dx_likelihood);
-  if ( likelihood >= 1e2 ) {
+  if ( (likelihood - 15.0) > std::numeric_limits<double>::epsilon() ) {
     printf("\nLikelihood for point abnormally large\n");
   }
   
@@ -355,6 +356,16 @@ stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
   out[0].rho_tilde = out[0].rho_tilde + params.tau_rho*etas[2];
 
   return out[0];
+}
+
+double compute_ESS(const std::vector<double>& log_weights)
+{
+  double sum_sq_weights = 0;
+  for (const double& log_weight : log_weights) {
+    sum_sq_weights += exp(2*log_weight);
+  }
+  
+  return 1.0 /sum_sq_weights;
 }
 
 std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_t,

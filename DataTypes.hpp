@@ -85,6 +85,7 @@ stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
 			     const parameters& params,
 			     gsl_rng * r);
 
+double compute_ESS(const std::vector<double>& log_weights);
 std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_t,
 				      const std::vector<double>& log_weights);
 

@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 		thetas,
 		params,
 		6.5*3600*1,
-		seed);
+		10);
 
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
@@ -289,7 +289,8 @@ int main(int argc, char *argv[]) {
       std::cout << quantile << " ";
       mean_levels << quantile << ",";
     }
-    std::cout << tt << std::endl;
+    std::cout << tt << " ";
+    std::cout << "ess = " << compute_ESS(log_weights) << std::endl;
     mean_levels << "\n";
     
   }
