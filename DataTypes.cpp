@@ -287,7 +287,21 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							   dx_likelihood);
   if ( (likelihood - 15.0) > std::numeric_limits<double>::epsilon() ) {
-    printf("\nLikelihood for point abnormally large: %f \n", likelihood);
+    double tau_x = 0;
+    double tau_y = 0;
+
+    if ( std::signbit(sigma_x/Lx-sigma_y/Ly)) {
+      tau_x = sigma_y/Ly;
+      tau_y = sigma_x/Lx;
+    } else {
+      tau_x = sigma_x/Lx;
+      tau_y = sigma_y/Ly;
+    }
+
+    double t_tilde = 1.0*tau_x*tau_x;
+    double sigma_y_tilde = tau_y/tau_x;
+    
+    printf("\nLikelihood for point abnormally large: %f, t_tilde = %f, sigma_y_tilde = %f \n", likelihood, t_tilde, sigma_y_tilde);
   }
   
   likelihood = likelihood / (std::pow(Lx,3) * std::pow(Ly,3));
