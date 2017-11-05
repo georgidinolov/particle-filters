@@ -287,7 +287,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
 							   dx_likelihood);
   if ( (likelihood - 15.0) > std::numeric_limits<double>::epsilon() ) {
-    printf("\nLikelihood for point abnormally large\n");
+    printf("\nLikelihood for point abnormally large: %f \n", likelihood);
   }
   
   likelihood = likelihood / (std::pow(Lx,3) * std::pow(Ly,3));
