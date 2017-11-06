@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
   
   omp_set_dynamic(0);
+  omp_set_num_threads(10);
 
   static int counter = 0;
 #pragma omp threadprivate(counter)
