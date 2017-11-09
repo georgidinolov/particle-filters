@@ -7,8 +7,8 @@
 #include <limits>
 
 void print_params(const parameters& params) {
-  printf("alpha_x = %f\nalpha_y = %f\nalpha_rho = %f\n",
-	 params.alpha_x, params.alpha_y, params.alpha_rho);
+  printf("mu_x = %f \nmu_y = %f\n alpha_x = %f\nalpha_y = %f\nalpha_rho = %f\n theta_x = %f\n theta_y = %f\n theta_rho = %f\n",
+	 params.mu_x, params.mu_y, params.alpha_x, params.alpha_y, params.alpha_rho, params.theta_x, params.theta_y, params.theta_rho);
 }
 
 double logit(double p) {
@@ -102,8 +102,11 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
   std::vector<parameters> out = std::vector<parameters> (N_particles);
 
   for (unsigned i=0; i<N_particles; ++i) {
-    out[i].mu_x = 0; // setting these to zero artificially
-    out[i].mu_y = 0;
+    out[i].mu_x = prior_x.get_mu_prior().get_mu_mean() +
+      gsl_ran_gaussian(r, prior_x.get_mu_prior().get_mu_std_dev());
+
+    out[i].mu_y = prior_y.get_mu_prior().get_mu_mean() +
+      gsl_ran_gaussian(r, prior_y.get_mu_prior().get_mu_std_dev());
     //
     out[i].alpha_x = prior_x.get_alpha_prior().get_alpha_mean() +
       gsl_ran_gaussian(r, prior_x.get_alpha_prior().get_alpha_std_dev());
@@ -188,7 +191,64 @@ std::vector<stoch_vol_datum> theta_next_mean(const std::vector<stoch_vol_datum>&
 
   return out;
 }
+std::vector<stoch_vol_datum> theta_next_mean(const std::vector<stoch_vol_datum>& theta_current,
+					     const observable_datum& y_current,
+					     const observable_datum& y_current_tm1,
+					     const std::vector<parameters>& params) {
 
+  std::vector<stoch_vol_datum> out =
+    std::vector<stoch_vol_datum> (theta_current.size());
+
+  for (unsigned i=0; i<theta_current.size(); ++i) {
+    std::vector<double> epsilons =
+      epsilons_given_theta(theta_current[i],
+  			   y_current,
+  			   y_current_tm1,
+  			   params[i]);
+
+    std::vector<double> eta_means {
+      params[i].leverage_x_rho*epsilons[0],
+  	params[i].leverage_y_rho*epsilons[1],
+  	0.0};
+
+    out[i].log_sigma_x =
+      params[i].alpha_x +
+      params[i].theta_x*(theta_current[i].log_sigma_x - params[i].alpha_x) +
+      params[i].tau_x*eta_means[0];
+
+    out[i].log_sigma_y =
+      params[i].alpha_y +
+      params[i].theta_y*(theta_current[i].log_sigma_y - params[i].alpha_y) +
+      params[i].tau_y*eta_means[1];
+
+    out[i].rho_tilde =
+      theta_current[i].rho_tilde + params[i].tau_rho*eta_means[2];
+  }
+
+  return out;
+}
+
+std::vector<parameters> parameters_next_mean(const std::vector<parameters>& parameters_current,
+					     const gsl_vector* scaled_mean,
+					     double scale_a)
+{
+  std::vector<parameters> out = std::vector<parameters> (parameters_current.size());
+
+  for (unsigned i=0; i<parameters_current.size(); ++i) {
+
+    const parameters& current_parameter = parameters_current[i];
+    gsl_vector* current_parameter_real = parameters_to_reals(current_parameter);
+
+    gsl_vector_scale(current_parameter_real, scale_a);
+    gsl_vector_add(current_parameter_real, scaled_mean);
+
+    out[i] = reals_to_parameters(current_parameter_real);
+
+    gsl_vector_free(current_parameter_real);
+  }
+
+  return out;
+}
 
 std::vector<double> log_likelihoods(const observable_datum& y_t,
 				    const observable_datum& y_tm1,
@@ -723,24 +783,29 @@ gsl_vector* compute_parameters_mean(const std::vector<parameters>& params_t,
 {
   gsl_vector * out = gsl_vector_calloc(13);
 
+  double total_weight = 0.0;
+  for (const double& log_weight : log_weights) {
+    total_weight = total_weight + exp(log_weight);
+  }
+  
   for (unsigned i=0; i<params_t.size(); ++i) {
-    double summand [13] = {exp(log_weights[i])*params_t[i].mu_x,
-			   exp(log_weights[i])*params_t[i].mu_y,
+    double summand [13] = {exp(log_weights[i])/total_weight*params_t[i].mu_x,
+			   exp(log_weights[i])/total_weight*params_t[i].mu_y,
 			   //
-			   exp(log_weights[i])*params_t[i].alpha_x,
-			   exp(log_weights[i])*params_t[i].alpha_y,
-			   exp(log_weights[i])*params_t[i].alpha_rho,
+			   exp(log_weights[i])/total_weight*params_t[i].alpha_x,
+			   exp(log_weights[i])/total_weight*params_t[i].alpha_y,
+			   exp(log_weights[i])/total_weight*params_t[i].alpha_rho,
 			   //
-			   exp(log_weights[i])*log(params_t[i].theta_x),
-			   exp(log_weights[i])*log(params_t[i].theta_y),
-			   exp(log_weights[i])*log(params_t[i].theta_rho),
+			   exp(log_weights[i])/total_weight*log(params_t[i].theta_x),
+			   exp(log_weights[i])/total_weight*log(params_t[i].theta_y),
+			   exp(log_weights[i])/total_weight*log(params_t[i].theta_rho),
 			   //
-			   exp(log_weights[i])*log(params_t[i].tau_x),
-			   exp(log_weights[i])*log(params_t[i].tau_y),
-			   exp(log_weights[i])*log(params_t[i].tau_rho),
+			   exp(log_weights[i])/total_weight*log(params_t[i].tau_x),
+			   exp(log_weights[i])/total_weight*log(params_t[i].tau_y),
+			   exp(log_weights[i])/total_weight*log(params_t[i].tau_rho),
 			   //
-			   exp(log_weights[i])* logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
-			   exp(log_weights[i])* logit( (params_t[i].leverage_y_rho+1.0)/2.0 )};
+			   exp(log_weights[i])/total_weight* logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
+			   exp(log_weights[i])/total_weight* logit( (params_t[i].leverage_y_rho+1.0)/2.0 )};
     
     gsl_vector_view gsl_summand = gsl_vector_view_array(summand, 13);
     gsl_vector_add(out, &gsl_summand.vector);
@@ -755,6 +820,11 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 {
   gsl_matrix * sufficient_statistics = gsl_matrix_calloc(13,13);
   gsl_matrix * covariance = gsl_matrix_alloc(13,13);
+
+  double total_weight = 0.0;
+  for (const double& log_weight : log_weights) {
+    total_weight = total_weight + exp(log_weight);
+  }
 
   for (unsigned i=0; i<params_t.size(); ++i) {
     double summand [13] = {params_t[i].mu_x,
@@ -773,7 +843,7 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 			   log(params_t[i].tau_rho),
 			   //
 			   logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
-			   logit( (params_t[i].leverage_y_rho+1.0)/2.0 )};
+			   logit( (params_t[i].leverage_y_rho+1.0)/2.0 ) };
     
     for (unsigned j=0; j<13; ++j) {
       for (unsigned k=j; k<13; ++k) {
@@ -782,13 +852,15 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 
 	gsl_matrix_set(sufficient_statistics,
 		       j,k,
-		       current_entry + summand[j]*summand[k]*exp(log_weights[i]));
+		       current_entry + summand[j]*summand[k]*
+		       exp(log_weights[i])/total_weight);
 
 	gsl_matrix_set(sufficient_statistics,
 		       k,j,
 		       gsl_matrix_get(sufficient_statistics,j,k));
       }
     }
+    
   }
 
   for (unsigned i=0; i<13; ++i) {
@@ -800,8 +872,91 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
       gsl_matrix_set(covariance,
 		     i,j,
 		     entry);
+      gsl_matrix_set(covariance,
+		     j,i,
+		     entry);
     }
   }
 
+  gsl_matrix_free(sufficient_statistics);
   return covariance;
+}
+
+void print_vector(const gsl_vector* mean,
+		  unsigned size)
+{
+  std::cout << "mean = c(";
+  for (unsigned i=0; i<size; ++i) {
+    if (i < size-1) {
+      std::cout << gsl_vector_get(mean, i) << ",";
+    } else {
+      std::cout << gsl_vector_get(mean, i) << ");";
+    }
+  }
+}
+
+void print_matrix(const gsl_matrix* cov,
+		  unsigned size)
+{
+  std::cout << "covData = c(";
+  for (unsigned i=0; i<size; ++i) {
+    for (unsigned j=0; j<size; ++j) {
+      if (j < size-1) {
+	std::cout << gsl_matrix_get(cov, i, j) << ",";
+      } else {
+	std::cout << gsl_matrix_get(cov, i, j) << ",";
+      }
+    }
+  }
+  std::cout << std::endl;
+}
+
+
+gsl_vector* parameters_to_reals(const parameters& params)
+{
+  gsl_vector* out = gsl_vector_alloc(13);
+
+  gsl_vector_set(out, 0, params.mu_x);
+  gsl_vector_set(out, 1, params.mu_y);
+  // //
+  gsl_vector_set(out, 2, params.alpha_x);
+  gsl_vector_set(out, 3, params.alpha_y);
+  gsl_vector_set(out, 4, params.alpha_rho);
+  // //
+  gsl_vector_set(out, 5, log(params.theta_x));
+  gsl_vector_set(out, 6, log(params.theta_y));
+  gsl_vector_set(out, 7, log(params.theta_rho));
+  // // 
+  gsl_vector_set(out, 8, log(params.tau_x));
+  gsl_vector_set(out, 9, log(params.tau_y));
+  gsl_vector_set(out, 10, log(params.tau_rho));
+  //
+  gsl_vector_set(out, 11, logit( (params.leverage_x_rho+1.0)/2.0 ));
+  gsl_vector_set(out, 12, logit( (params.leverage_y_rho+1.0)/2.0 ));
+
+  return out;
+}
+
+parameters reals_to_parameters(const gsl_vector* params)
+{
+  parameters out;
+  out.mu_x = gsl_vector_get(params, 0);
+  out.mu_y = gsl_vector_get(params, 1);
+  // //
+  out.alpha_x = gsl_vector_get(params, 2);
+  out.alpha_y = gsl_vector_get(params, 3);
+  out.alpha_rho = gsl_vector_get(params, 4);
+  // //
+  out.theta_x = exp(gsl_vector_get(params, 5));
+  out.theta_y = exp(gsl_vector_get(params, 6));
+  out.theta_rho = exp(gsl_vector_get(params, 7));
+  // // 
+  out.tau_x = exp(gsl_vector_get(params, 8));
+  out.tau_y = exp(gsl_vector_get(params, 9));
+  out.tau_rho = exp(gsl_vector_get(params, 10));
+  //
+  out.leverage_x_rho = logit_inv(gsl_vector_get(params, 11))*2.0 - 1.0;
+  out.leverage_y_rho = logit_inv(gsl_vector_get(params, 12))*2.0 - 1.0;  
+
+  return out;
 }

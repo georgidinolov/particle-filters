@@ -58,11 +58,10 @@ cc_library(
 		 "-Isrc/brownian-motion",
 		 "-Isrc/finite-element-igraph",
 		 "-Isrc/igraph-0.7.1/include",
-		 "-Isrc/SV-with-leverage/src",
 		 "-O3"],
 	linkopts = ["-lm", "-lgsl", "-lgslcblas"],
 	deps = ["//src/multivariate-normal:multivariate-normal",
 		"//src/brownian-motion:2d-brownian-motion",
 		"//src/finite-element-igraph:bivariate-solver",
-		"//src/SV-with-leverage/src:prior-types"],
+		"@SVwithLeverage//src:prior-types"],
 )

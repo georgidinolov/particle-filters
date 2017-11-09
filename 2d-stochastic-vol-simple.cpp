@@ -166,13 +166,13 @@ int main(int argc, char *argv[]) {
     std::vector<double> lls (N_particles);
     
     t1 = std::chrono::high_resolution_clock::now();
-#pragma omp parallel default(none) private(i) shared(lls, theta_t, N_particles) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
+#pragma omp parallel default(none) private(i) shared(lls, theta_t, N_particles, theta_t_mean) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
     {
 #pragma omp for
       for (i=0; i<N_particles; ++i) {
 	double likelihood = log_likelihood_OCHL(y_t,
 						y_tm1,
-						theta_t[i],
+						theta_t_mean[i],
 						params,
 						private_bases,
 						dx,

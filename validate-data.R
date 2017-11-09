@@ -1,5 +1,5 @@
 library("data.table");
-file.name = "inference-classical"
+file.name = "test-full-tmp-sigma_x-0.30-sigma_y-0.30-rho-0.0-dx-likelihood-0.003905-nparticles-40-";
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
