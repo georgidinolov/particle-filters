@@ -2,21 +2,29 @@
 #include <cmath>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
+#include "PriorTypes.hpp"
 #include <vector>
 
 struct parameters {
   double mu_x;
   double mu_y;
+  //
   double alpha_x;
   double alpha_y;
+  double alpha_rho;
+  //
   double theta_x;
   double theta_y;
+  double theta_rho;
+  //
   double tau_x;
   double tau_y;
   double tau_rho;
+  //
   double leverage_x_rho;
   double leverage_y_rho;
 };
+void print_params(const parameters& params);
 
 struct observable_datum {
   double x_tm1;
@@ -45,6 +53,16 @@ std::vector<double> epsilons_given_theta(const stoch_vol_datum& theta_current,
 					   const parameters& params);
 
 std::vector<stoch_vol_datum> sample_theta_prior(const parameters& params,
+						unsigned N_particles,
+						gsl_rng *r);
+std::vector<stoch_vol_datum> sample_theta_prior(const std::vector<parameters>& params,
+						unsigned N_particles,
+						gsl_rng *r);
+
+std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors& priors_x,
+						const StochasticVolatilityPriors& prior_y,
+						const StochasticVolatilityPriors& prior_rho,
+						const RhoPrior& prior_rho_leverage,
 						unsigned N_particles,
 						gsl_rng *r);
 
@@ -85,6 +103,12 @@ stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
 			     const parameters& params,
 			     gsl_rng * r);
 
+parameters sample_parameters(const gsl_vector* scaled_mean,
+			     const gsl_matrix* scaled_cov,
+			     const parameters& params,
+			     gsl_rng * r,
+			     double a);
+
 double compute_ESS(const std::vector<double>& log_weights);
 std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_t,
 				      const std::vector<double>& log_weights);
@@ -94,3 +118,9 @@ void generate_data(std::vector<observable_datum>& ys,
 		   const parameters& params,
 		   unsigned order,
 		   long unsigned seed);
+
+gsl_vector*  compute_parameters_mean(const std::vector<parameters>& params_t,
+				    const std::vector<double>& log_weights);
+gsl_matrix*  compute_parameters_cov(const gsl_vector* mean,
+				     const std::vector<parameters>& params_t,
+				     const std::vector<double>& log_weights);
