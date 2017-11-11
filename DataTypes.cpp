@@ -419,26 +419,49 @@ double log_likelihood_OCHL(const observable_datum& y_t,
 
   double Lx = y_t.b_x - y_t.a_x;
   double Ly = y_t.b_y - y_t.a_y;
+  double likelihood = 0;
 
-  BivariateSolver solver = BivariateSolver(basis,
-					   sigma_x/Lx,
-					   sigma_y/Lx,
-					   rho,
-					   y_t.a_x/Lx,
-					   y_t.x_tm1/Lx,
-					   y_t.b_x/Lx,
-					   y_t.a_y/Ly,
-					   y_t.y_tm1/Ly,
-					   y_t.b_y/Ly,
-					   1.0,
-					   dx);
+  if (!std::signbit(rho)) {
+    BivariateSolver solver = BivariateSolver(basis,
+					     sigma_x/Lx,
+					     sigma_y/Lx,
+					     rho,
+					     y_t.a_x/Lx,
+					     y_t.x_tm1/Lx,
+					     y_t.b_x/Lx,
+					     y_t.a_y/Ly,
+					     y_t.y_tm1/Ly,
+					     y_t.b_y/Ly,
+					     1.0,
+					     dx);
+    
+    x[0] = y_t.x_t/Lx;
+    x[1] = y_t.y_t/Ly;
 
-  x[0] = y_t.x_t/Lx;
-  x[1] = y_t.y_t/Ly;
+    likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
+						      dx_likelihood);
+  } else {
+    BivariateSolver solver = BivariateSolver(basis,
+					     sigma_x/Lx,
+					     sigma_y/Lx,
+					     -rho,
+					     -y_t.b_x/Lx,
+					     -y_t.x_tm1/Lx,
+					     -y_t.a_x/Lx,
+					     y_t.a_y/Ly,
+					     y_t.y_tm1/Ly,
+					     y_t.b_y/Ly,
+					     1.0,
+					     dx);
+    
+    x[0] = -y_t.x_t/Lx;
+    x[1] = y_t.y_t/Ly;
 
-  double likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
-							   dx_likelihood);
-  if ( (likelihood - 15.0) > std::numeric_limits<double>::epsilon() ) {
+    likelihood = solver.numerical_likelihood_extended(&gsl_x.vector,
+						      dx_likelihood);
+  }
+
+  if ( (likelihood - 20.0) > std::numeric_limits<double>::epsilon() ) {
     double tau_x = 0;
     double tau_y = 0;
 
@@ -453,7 +476,8 @@ double log_likelihood_OCHL(const observable_datum& y_t,
     double t_tilde = 1.0*tau_x*tau_x;
     double sigma_y_tilde = tau_y/tau_x;
 
-    printf("\nLikelihood for point abnormally large: %f, t_tilde = %f, sigma_y_tilde = %f \n", likelihood, t_tilde, sigma_y_tilde);
+    printf("\nLikelihood for point abnormally large: %f, t_tilde = %f, sigma_y_tilde = %f \n", 
+	   likelihood, t_tilde, sigma_y_tilde);
   }
 
   likelihood = likelihood / (std::pow(Lx,3) * std::pow(Ly,3));

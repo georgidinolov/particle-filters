@@ -2,7 +2,7 @@
 #include <cmath>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
-#include "src/PriorTypes.hpp"
+#include "PriorTypes.hpp"
 #include <vector>
 
 struct parameters {

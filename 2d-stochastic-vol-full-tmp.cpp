@@ -3,12 +3,15 @@
 #include <cmath>
 #include "DataTypes.hpp"
 #include <fstream>
+#include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_linalg.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
 #include <iostream>
 #include <omp.h>
+#include <stdio.h>
 #include <vector>
 
 
@@ -40,7 +43,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(4);
+  omp_set_num_threads(20);
 
   static int counter = 0;
 #pragma omp threadprivate(counter)
@@ -185,7 +188,7 @@ int main(int argc, char *argv[]) {
   mean_levels.open(output_file);
   mean_levels << "mean_log_sigma_x, var_log_sigma_x,"
 	      << "mean_log_sigma_y, var_log_sigma_y,"
-	      << "mean_rho_tilde, var_rho_tilde, NA\n";
+	      << "mean_rho_tilde, var_rho_tilde, ess\n";
 
   double dx = 1.0/500.0;
   double power = 1.0;
@@ -229,6 +232,7 @@ int main(int argc, char *argv[]) {
     observable_datum y_tm1 = ys[tt-1];
 
     double scale_a = 0.99;
+
     t1 = std::chrono::high_resolution_clock::now();
     gsl_vector* scaled_mean = compute_parameters_mean(params_tm1,
     						      log_weights);
@@ -236,10 +240,42 @@ int main(int argc, char *argv[]) {
     gsl_matrix* scaled_cov = compute_parameters_cov(scaled_mean,
     						    params_tm1,
     						    log_weights);
+    
 
     gsl_vector_scale(scaled_mean, (1.0-scale_a));
     gsl_matrix_scale(scaled_cov,  std::pow((1.0-scale_a*scale_a), 2));
-    
+    // OUTPUTTING MATRIX START
+    FILE * cov_matrix = fopen ("scaled_cov.dat", "wb");
+    gsl_matrix_fwrite(cov_matrix, scaled_cov);
+    fclose(cov_matrix);
+    // OUTPUTTING MATRIX END
+
+    // TO CHECK IF THE COV IS POS DEF START //
+    gsl_error_handler_t* old_handler = gsl_set_error_handler_off();
+    gsl_matrix* work = gsl_matrix_alloc(13, 13);
+    gsl_matrix_memcpy(work, scaled_cov);
+
+    int status = gsl_linalg_cholesky_decomp(work);
+    if (status == GSL_EDOM) {
+      gsl_vector_view diag_view = gsl_matrix_diagonal(scaled_cov);
+      gsl_vector* diag_cpy = gsl_vector_alloc(13);
+      gsl_vector_memcpy(diag_cpy, &diag_view.vector);
+
+      gsl_matrix_set_zero(scaled_cov);
+      gsl_vector_memcpy(&diag_view.vector, diag_cpy);
+      
+      // we need to check for non-zero diagonal entries too
+      for (unsigned i=0; i<13; ++i) {
+	if ( gsl_matrix_get(scaled_cov,i,i) < std::numeric_limits<double>::epsilon() ) {
+	  gsl_matrix_set(scaled_cov, i,i,
+			 std::pow(gsl_vector_get(scaled_mean,i), 2));
+	}
+      }
+    }
+    gsl_set_error_handler(old_handler);
+    gsl_matrix_free(work);
+    // TO CHECK IF THE COV IS POS DEF END //
+
     t2 = std::chrono::high_resolution_clock::now();
     std::cout << "\nmean cov computation times = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
 
@@ -398,6 +434,7 @@ int main(int argc, char *argv[]) {
       std::cout << quantile << " ";
       mean_levels << quantile << ",";
     }
+    mean_levels << compute_ESS(log_weights);
     std::cout << tt << " ";
     std::cout << "ess = " << compute_ESS(log_weights) << std::endl;
     mean_levels << "\n";
