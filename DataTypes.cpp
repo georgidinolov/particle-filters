@@ -73,7 +73,7 @@ std::vector<stoch_vol_datum> sample_theta_prior(const std::vector<parameters>& p
   for (unsigned i=0; i<N_particles; ++i) {
 
     parameters params = parameters_vector[i];
-    
+
     stoch_vol_datum Theta;
     Theta.log_sigma_x =
       params.alpha_x +
@@ -118,7 +118,7 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
     out[i].theta_x = gsl_ran_gamma(r,
 				   prior_x.get_theta_prior().get_theta_shape(),
 				   prior_x.get_theta_prior().get_theta_scale());
-    
+
     out[i].theta_y = gsl_ran_gamma(r,
 				   prior_y.get_theta_prior().get_theta_shape(),
 				   prior_y.get_theta_prior().get_theta_scale());
@@ -129,7 +129,7 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
     out[i].tau_x = std::sqrt(gsl_ran_gamma(r,
 					   prior_x.get_tau_square_prior().get_tau_square_shape(),
 					   prior_x.get_tau_square_prior().get_tau_square_scale()));
-    
+
     out[i].tau_y = std::sqrt(gsl_ran_gamma(r,
 					   prior_y.get_tau_square_prior().get_tau_square_shape(),
 					   prior_y.get_tau_square_prior().get_tau_square_scale()));
@@ -151,7 +151,7 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
 	gsl_ran_gaussian(r, prior_rho_leverage.get_rho_std_dev());
     }
   }
-  
+
   return out;
 }
 
@@ -424,7 +424,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   if (!std::signbit(rho)) {
     BivariateSolver solver = BivariateSolver(basis,
 					     sigma_x/Lx,
-					     sigma_y/Lx,
+					     sigma_y/Ly,
 					     rho,
 					     y_t.a_x/Lx,
 					     y_t.x_tm1/Lx,
@@ -434,7 +434,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
 					     y_t.b_y/Ly,
 					     1.0,
 					     dx);
-    
+
     x[0] = y_t.x_t/Lx;
     x[1] = y_t.y_t/Ly;
 
@@ -443,7 +443,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   } else {
     BivariateSolver solver = BivariateSolver(basis,
 					     sigma_x/Lx,
-					     sigma_y/Lx,
+					     sigma_y/Ly,
 					     -rho,
 					     -y_t.b_x/Lx,
 					     -y_t.x_tm1/Lx,
@@ -453,7 +453,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
 					     y_t.b_y/Ly,
 					     1.0,
 					     dx);
-    
+
     x[0] = -y_t.x_t/Lx;
     x[1] = y_t.y_t/Ly;
 
@@ -476,7 +476,7 @@ double log_likelihood_OCHL(const observable_datum& y_t,
     double t_tilde = 1.0*tau_x*tau_x;
     double sigma_y_tilde = tau_y/tau_x;
 
-    printf("\nLikelihood for point abnormally large: %f, t_tilde = %f, sigma_y_tilde = %f \n", 
+    printf("\nLikelihood for point abnormally large: %f, t_tilde = %f, sigma_y_tilde = %f \n",
 	   likelihood, t_tilde, sigma_y_tilde);
   }
 
@@ -543,7 +543,10 @@ stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
 
   out[0].log_sigma_x = out[0].log_sigma_x + params.tau_x*etas[0];
   out[0].log_sigma_y = out[0].log_sigma_y + params.tau_y*etas[1];
+
+  // FIXING RHO TO CORRECT VAL
   out[0].rho_tilde = out[0].rho_tilde + params.tau_rho*etas[2];
+  // sout[0].rho_tilde = logit((0.6 + 1.0)/2.0);
 
   return out[0];
 }
@@ -576,7 +579,7 @@ parameters sample_parameters(const gsl_vector* scaled_mean,
   gsl_vector_add(&phi.vector, scaled_mean);
 
   MultivariateNormal mvnorm = MultivariateNormal();
-  
+
   mvnorm.rmvnorm(r,
 		 13,
 		 &phi.vector,
@@ -586,6 +589,7 @@ parameters sample_parameters(const gsl_vector* scaled_mean,
   parameters out_params;
   out_params.mu_x = 0;
   out_params.mu_y = 0;
+  //
   out_params.alpha_x = gsl_vector_get(&out.vector, 2);
   out_params.alpha_y = gsl_vector_get(&out.vector, 3);
   out_params.alpha_rho = gsl_vector_get(&out.vector, 4);
@@ -598,8 +602,10 @@ parameters sample_parameters(const gsl_vector* scaled_mean,
   out_params.tau_y = exp(gsl_vector_get(&out.vector, 9));
   out_params.tau_rho = exp(gsl_vector_get(&out.vector, 10));
   //
-  out_params.leverage_x_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 11)) - 1.0;
-  out_params.leverage_y_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 12)) - 1.0;
+  // out_params.leverage_x_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 11)) - 1.0;
+  // out_params.leverage_y_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 12)) - 1.0;
+  out_params.leverage_x_rho = 0.0;
+  out_params.leverage_y_rho = 0.0;
 
   return out_params;
 }
@@ -667,16 +673,53 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
 	rho_tilde_mean, rho_tilde_var};
 }
 
+std::vector<double> compute_quantiles(const std::vector<parameters>& params_t,
+				      const std::vector<double>& log_weights)
+{
+  unsigned params_length = params_t[0].parameters_number;
+  std::vector<double> sum (params_length, 0.0);
+  std::vector<double> sum_sq (params_length, 0.0);
+
+  for (unsigned i=0; i<params_t.size(); ++i) {
+    const parameters& current_parameters = params_t[i];
+    gsl_vector* current_parameter_transformed = parameters_to_reals(current_parameters);
+    gsl_vector* current_parameter_transformed_sq = gsl_vector_alloc(params_length);
+    gsl_vector_memcpy(current_parameter_transformed_sq, current_parameter_transformed);
+    gsl_vector_mul(current_parameter_transformed_sq, current_parameter_transformed);
+
+    for (unsigned j=0; j<params_length; ++j) {
+      sum[j] = sum[j] + exp(log_weights[i])*gsl_vector_get(current_parameter_transformed,j);
+      sum_sq[j] = sum_sq[j] + exp(log_weights[i])*gsl_vector_get(current_parameter_transformed_sq,j);
+    }
+
+    gsl_vector_free(current_parameter_transformed);
+    gsl_vector_free(current_parameter_transformed_sq);
+  }
+
+  std::vector<double> out (2*params_length);
+
+  for (unsigned i=0; i<params_length; ++i) {
+    out[2*i] = sum[i];
+    out[2*i+1] = sum_sq[i] - sum[i]*sum[i];
+  }
+
+  return out;
+}
+
  void generate_data(std::vector<observable_datum>& ys,
 		    std::vector<stoch_vol_datum>& thetas,
 		    const parameters& params,
 		    unsigned order,
-		    long unsigned seed)
+		    long unsigned seed,
+		    unsigned buffer,
+		    bool SWITCH_XY)
  {
    std::ofstream output;
    output.open("data.csv");
 
-  unsigned N = ys.size();
+  unsigned N = ys.size() + buffer;
+  std::vector<observable_datum> ys_long (N);
+  std::vector<stoch_vol_datum> thetas_long (N);
 
   double rho_t = 0;
   double rho_tilde_t = logit((rho_t+1)/2);
@@ -702,20 +745,14 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
     //                      rho_tilde = as_numeric(rep(NA,N)))
 
 
-  // FIRST ROW
-  output << "ax, x, bx, ay, y, by, log.sigma.x, log.sigma.y, rho.tilde \n";
-  output << "NA" << "," << x_t << "," << "NA" << ","
-	 << "NA" << "," << y_t << "," << "NA" << ","
-	 << log_sigma_x_t << ","
-	 << log_sigma_y_t << ","
-	 << rho_tilde_t << "\n";
 
-  ys[0].x_tm1 = x_t;
-  ys[0].y_tm1 = y_t;
 
-  thetas[0].log_sigma_x = log_sigma_x_t;
-  thetas[0].log_sigma_y = log_sigma_y_t;
-  thetas[0].rho_tilde = rho_tilde_t;
+  ys_long[0].x_tm1 = x_t;
+  ys_long[0].y_tm1 = y_t;
+
+  thetas_long[0].log_sigma_x = log_sigma_x_t;
+  thetas_long[0].log_sigma_y = log_sigma_y_t;
+  thetas_long[0].rho_tilde = rho_tilde_t;
 
   // output[1, c("x",
   //             "y",
@@ -765,21 +802,21 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
     double x_tp1 = BM.get_x_T();
     double y_tp1 = BM.get_y_T();
 
-    ys[i].x_t = x_tp1;
-    ys[i].a_x = BM.get_a();
-    ys[i].b_x = BM.get_b();
+    ys_long[i].x_t = x_tp1;
+    ys_long[i].a_x = BM.get_a();
+    ys_long[i].b_x = BM.get_b();
     // // // //
-    ys[i].y_t = y_tp1;
-    ys[i].a_y = BM.get_c();
-    ys[i].b_y = BM.get_d();
+    ys_long[i].y_t = y_tp1;
+    ys_long[i].a_y = BM.get_c();
+    ys_long[i].b_y = BM.get_d();
 
     if (i < N-1) {
-      ys[i+1].x_tm1 = x_tp1;
-      ys[i+1].y_tm1 = y_tp1;
+      ys_long[i+1].x_tm1 = x_tp1;
+      ys_long[i+1].y_tm1 = y_tp1;
       // // // // //
-      thetas[i+1].log_sigma_x = log_sigma_x_tp1;
-      thetas[i+1].log_sigma_y = log_sigma_y_tp1;
-      thetas[i+1].rho_tilde = rho_tilde_tp1;
+      thetas_long[i+1].log_sigma_x = log_sigma_x_tp1;
+      thetas_long[i+1].log_sigma_y = log_sigma_y_tp1;
+      thetas_long[i+1].rho_tilde = rho_tilde_tp1;
     }
 
     x_t = x_tp1;
@@ -789,14 +826,47 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
     rho_tilde_t = rho_tilde_tp1;
     rho_t = rho_tp1;
 
-    output << ys[i].a_x << "," << x_t << "," << ys[i].b_x << ","
-	   << ys[i].a_y << "," << y_t << "," << ys[i].b_y << ","
-	   << log_sigma_x_t << ","
-	   << log_sigma_y_t << ","
-	   << rho_tilde_t << "\n";
+
   }
 
   gsl_rng_free(r_ptr);
+
+  for (unsigned i=0; i<ys.size(); ++i) {
+    if (SWITCH_XY) {
+      ys[i].x_tm1 = ys_long[i+buffer].y_tm1;
+      ys[i].x_t = ys_long[i+buffer].y_t;
+      ys[i].a_x = ys_long[i+buffer].a_y;
+      ys[i].b_x = ys_long[i+buffer].b_y;
+
+      ys[i].y_tm1 = ys_long[i+buffer].x_tm1;
+      ys[i].y_t = ys_long[i+buffer].x_t;
+      ys[i].a_y = ys_long[i+buffer].a_x;
+      ys[i].b_y = ys_long[i+buffer].b_x;
+
+      thetas[i].log_sigma_x = thetas_long[i+buffer].log_sigma_y;
+      thetas[i].log_sigma_y = thetas_long[i+buffer].log_sigma_x;
+      thetas[i].rho_tilde = thetas_long[i+buffer].rho_tilde;
+    } else {
+      ys[i] = ys_long[i+buffer];
+      thetas[i] = thetas_long[i+buffer];
+    }
+  }
+
+  // FIRST ROW
+  output << "ax, x, bx, ay, y, by, log.sigma.x, log.sigma.y, rho.tilde \n";
+  output << "NA" << "," << ys[0].x_tm1 << "," << "NA" << ","
+	 << "NA" << "," << ys[0].y_tm1 << "," << "NA" << ","
+	 << params.alpha_x << ","
+	 << params.alpha_y << ","
+	 << logit((0.0+1.0)/2) << "\n";
+
+  for (unsigned i=0; i<ys.size(); ++i) {
+      output << ys[i].a_x << "," << ys[i].x_t << "," << ys[i].b_x << ","
+	     << ys[i].a_y << "," << ys[i].y_t << "," << ys[i].b_y << ","
+	     << thetas[i].log_sigma_x << ","
+	     << thetas[i].log_sigma_y << ","
+	     << thetas[i].rho_tilde << "\n";
+  }
 
    output.close();
  }
@@ -811,7 +881,7 @@ gsl_vector* compute_parameters_mean(const std::vector<parameters>& params_t,
   for (const double& log_weight : log_weights) {
     total_weight = total_weight + exp(log_weight);
   }
-  
+
   for (unsigned i=0; i<params_t.size(); ++i) {
     double summand [13] = {exp(log_weights[i])/total_weight*params_t[i].mu_x,
 			   exp(log_weights[i])/total_weight*params_t[i].mu_y,
@@ -830,7 +900,7 @@ gsl_vector* compute_parameters_mean(const std::vector<parameters>& params_t,
 			   //
 			   exp(log_weights[i])/total_weight* logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
 			   exp(log_weights[i])/total_weight* logit( (params_t[i].leverage_y_rho+1.0)/2.0 )};
-    
+
     gsl_vector_view gsl_summand = gsl_vector_view_array(summand, 13);
     gsl_vector_add(out, &gsl_summand.vector);
   }
@@ -868,7 +938,7 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 			   //
 			   logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
 			   logit( (params_t[i].leverage_y_rho+1.0)/2.0 ) };
-    
+
     for (unsigned j=0; j<13; ++j) {
       for (unsigned k=j; k<13; ++k) {
 
@@ -884,7 +954,7 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 		       gsl_matrix_get(sufficient_statistics,j,k));
       }
     }
-    
+
   }
 
   for (unsigned i=0; i<13; ++i) {
@@ -950,7 +1020,7 @@ gsl_vector* parameters_to_reals(const parameters& params)
   gsl_vector_set(out, 5, log(params.theta_x));
   gsl_vector_set(out, 6, log(params.theta_y));
   gsl_vector_set(out, 7, log(params.theta_rho));
-  // // 
+  // //
   gsl_vector_set(out, 8, log(params.tau_x));
   gsl_vector_set(out, 9, log(params.tau_y));
   gsl_vector_set(out, 10, log(params.tau_rho));
@@ -974,13 +1044,13 @@ parameters reals_to_parameters(const gsl_vector* params)
   out.theta_x = exp(gsl_vector_get(params, 5));
   out.theta_y = exp(gsl_vector_get(params, 6));
   out.theta_rho = exp(gsl_vector_get(params, 7));
-  // // 
+  // //
   out.tau_x = exp(gsl_vector_get(params, 8));
   out.tau_y = exp(gsl_vector_get(params, 9));
   out.tau_rho = exp(gsl_vector_get(params, 10));
   //
   out.leverage_x_rho = logit_inv(gsl_vector_get(params, 11))*2.0 - 1.0;
-  out.leverage_y_rho = logit_inv(gsl_vector_get(params, 12))*2.0 - 1.0;  
+  out.leverage_y_rho = logit_inv(gsl_vector_get(params, 12))*2.0 - 1.0;
 
   return out;
 }

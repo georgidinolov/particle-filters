@@ -1,5 +1,5 @@
 library("data.table");
-file.name = "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-50-"
+file.name = "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.5-dx-likelihood-0.003905-nparticles-80-FLIPPED-fixed-leverage"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,

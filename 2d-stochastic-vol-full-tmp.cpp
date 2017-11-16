@@ -10,6 +10,7 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
 #include <iostream>
+#include <limits>
 #include <omp.h>
 #include <stdio.h>
 #include <vector>
@@ -43,7 +44,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(20);
+  omp_set_num_threads(40);
 
   static int counter = 0;
 #pragma omp threadprivate(counter)
@@ -86,11 +87,14 @@ int main(int argc, char *argv[]) {
   long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   seed = 10;
 
+  unsigned buffer = 30;
   generate_data(ys,
 		thetas,
 		params,
 		6.5*3600*1,
-		10);
+		10,
+		buffer,
+		true);
 
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
@@ -188,7 +192,27 @@ int main(int argc, char *argv[]) {
   mean_levels.open(output_file);
   mean_levels << "mean_log_sigma_x, var_log_sigma_x,"
 	      << "mean_log_sigma_y, var_log_sigma_y,"
-	      << "mean_rho_tilde, var_rho_tilde, ess\n";
+	      << "mean_rho_tilde, var_rho_tilde,"
+    //
+	      << "mean_mu_x, var_mu_x,"
+	      << "mean_mu_y, var_mu_y,"
+    //
+	      << "mean_alpha_x, var_alpha_x,"
+	      << "mean_alpha_y, var_alpha_y,"
+	      << "mean_alpha_rho, var_alpha_rho,"
+    //
+	      << "mean_theta_x_transformed, var_theta_x_transformed,"
+	      << "mean_theta_y_transformed, var_theta_y_transformed,"
+	      << "mean_theta_rho_transformed, var_theta_rho_transformed,"
+    //
+	      << "mean_tau_x_transformed, var_tau_x_transformed,"
+	      << "mean_tau_y_transformed, var_tau_y_transformed,"
+	      << "mean_tau_rho_transformed, var_tau_rho_transformed,"
+    //
+	      << "mean_leverage_x_rho_transformed, var_leverage_x_rho_transformed,"
+	      << "mean_leverage_y_rho_transformed, var_leverage_y_rho_transformed,"
+	      << "ess\n";
+  mean_levels.close();
 
   double dx = 1.0/500.0;
   double power = 1.0;
@@ -385,6 +409,10 @@ int main(int argc, char *argv[]) {
 	  log_new_weight =
 	    ll_for_sample -
 	    lls[k];
+
+	  if (std::isinf(log_new_weight) || std::isnan(log_new_weight)) {
+	    log_new_weight = -1.0*std::numeric_limits<double>::infinity();
+	  }
 	}
 
 	printf("on likelihood %d: sigma_x = %f, sigma_y = %f, rho = %f, log_new_weight = %f\n",
@@ -430,17 +458,25 @@ int main(int argc, char *argv[]) {
 
     std::vector<double> quantiles = compute_quantiles(theta_t,
 						      log_weights);
+    std::vector<double> structural_quantiles = compute_quantiles(params_t,
+								 log_weights);
+
+    mean_levels.open(output_file, std::ios_base::app);
     for (auto& quantile : quantiles) {
       std::cout << quantile << " ";
       mean_levels << quantile << ",";
     }
+    for (auto& quantile : structural_quantiles) {
+      mean_levels << quantile << ",";
+    }
+
     mean_levels << compute_ESS(log_weights);
     std::cout << tt << " ";
     std::cout << "ess = " << compute_ESS(log_weights) << std::endl;
-    mean_levels << "\n";
 
+    mean_levels << "\n";
+    mean_levels.close();
   }
-  mean_levels.close();
 
   gsl_rng_free(r_ptr);
   return 0;

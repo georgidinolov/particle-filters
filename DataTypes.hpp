@@ -23,6 +23,8 @@ struct parameters {
   //
   double leverage_x_rho;
   double leverage_y_rho;
+  //
+  unsigned parameters_number = 13;
 };
 void print_params(const parameters& params);
 
@@ -121,11 +123,16 @@ double compute_ESS(const std::vector<double>& log_weights);
 std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_t,
 				      const std::vector<double>& log_weights);
 
+std::vector<double> compute_quantiles(const std::vector<parameters>& params_t,
+				      const std::vector<double>& log_weights);
+
 void generate_data(std::vector<observable_datum>& ys,
  		   std::vector<stoch_vol_datum>& thetas,
 		   const parameters& params,
 		   unsigned order,
-		   long unsigned seed);
+		   long unsigned seed,
+		   unsigned buffer,
+		   bool SWITCH_XY);
 
 gsl_vector*  compute_parameters_mean(const std::vector<parameters>& params_t,
 				     const std::vector<double>& log_weights);
