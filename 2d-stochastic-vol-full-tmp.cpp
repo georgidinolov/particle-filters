@@ -87,14 +87,14 @@ int main(int argc, char *argv[]) {
   long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   seed = 10;
 
-  unsigned buffer = 30;
+  unsigned buffer = 0;
   generate_data(ys,
 		thetas,
 		params,
 		6.5*3600*1,
 		10,
 		buffer,
-		true);
+		false);
 
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {

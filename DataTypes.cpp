@@ -1,4 +1,4 @@
-#include "2DBrownianMotionPath.hpp"
+s#include "2DBrownianMotionPath.hpp"
 #include "DataTypes.hpp"
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
@@ -587,11 +587,15 @@ parameters sample_parameters(const gsl_vector* scaled_mean,
 		 &out.vector);
 
   parameters out_params;
+  // out_params.mu_x = gsl_vector_get(&out.vector, 0);
+  // out_params.mu_y = gsl_vector_get(&out.vector, 1);
   out_params.mu_x = 0;
   out_params.mu_y = 0;
   //
-  out_params.alpha_x = gsl_vector_get(&out.vector, 2);
-  out_params.alpha_y = gsl_vector_get(&out.vector, 3);
+  // out_params.alpha_x = gsl_vector_get(&out.vector, 2);
+  // out_params.alpha_y = gsl_vector_get(&out.vector, 3);
+  out_params.alpha_x = -4.51;
+  out_params.alpha_y = -4.51;
   out_params.alpha_rho = gsl_vector_get(&out.vector, 4);
   //
   out_params.theta_x = exp(gsl_vector_get(&out.vector, 5));
@@ -602,10 +606,10 @@ parameters sample_parameters(const gsl_vector* scaled_mean,
   out_params.tau_y = exp(gsl_vector_get(&out.vector, 9));
   out_params.tau_rho = exp(gsl_vector_get(&out.vector, 10));
   //
-  // out_params.leverage_x_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 11)) - 1.0;
-  // out_params.leverage_y_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 12)) - 1.0;
-  out_params.leverage_x_rho = 0.0;
-  out_params.leverage_y_rho = 0.0;
+  out_params.leverage_x_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 11)) - 1.0;
+  out_params.leverage_y_rho = 2.0*logit_inv(gsl_vector_get(&out.vector, 12)) - 1.0;
+  // out_params.leverage_x_rho = 0.0;
+  // out_params.leverage_y_rho = 0.0;
 
   return out_params;
 }
@@ -780,12 +784,12 @@ std::vector<double> compute_quantiles(const std::vector<parameters>& params_t,
       gsl_ran_gaussian(r_ptr, params.tau_y);
 
     double rho_tp1 = 0.6*sin(2.0*M_PI/256.0*i);
-    if (i < 130) {
-      rho_tp1 = -0.7;
-    } else {
+    if (i < 50) {
       rho_tp1 = 0.7;
+    } else {
+      rho_tp1 = -0.7;
     }
-    rho_tp1 = 0.6;
+    // rho_tp1 = 0.6;
     double rho_tilde_tp1 = logit( (rho_tp1 + 1.0)/2.0 );
 
     // rho_tilde_tp1 = rho_tilde_t + tau_rho*innovations[i-1,eta_rho]
