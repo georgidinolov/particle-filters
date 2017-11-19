@@ -1,6 +1,6 @@
 library("data.table");
-## file.name = "test-full-CLASSICAL-sigma_x-0.50-sigma_y-0.50-rho-0.0-dx-likelihood-0.003905-nparticles-800-ALL"
-file.name = "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-80-ALL"
+file.name = "test-classical-beta-nparticles-10-alpha-x"
+## file.name = "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-80-ALL"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,

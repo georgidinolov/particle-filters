@@ -18,28 +18,20 @@
 
 
 int main(int argc, char *argv[]) {
-  if (argc < 9 || argc > 9) {
+  if (argc < 5 || argc > 5) {
     printf("You must provide input\n");
-    printf("The input is: \n\noutput file prefix;\nnumber particles to be used; \ndx_likelihood; \nrho_basis; \nsigma_x for basis; \nsigma_y for basis; \nnumber data points; \noutput file suffix \n");
+    printf("The input is: \n\noutput file prefix;\nnumber particles to be used; \nnumber data points; \noutput file suffix \n");
     printf("It is wise to include the parameter values in the file name. We are using a fixed random seed.\n");
     exit(0);
   }
 
   std::string output_file_PREFIX = argv[1];
   unsigned N_particles = std::stoi(argv[2]);
-  double dx_likelihood = std::stod(argv[3]);
-  double rho_basis = std::stod(argv[4]);
-  double sigma_x = std::stod(argv[5]);
-  double sigma_y = std::stod(argv[6]);
-  int number_data_points = std::stod(argv[7]);
+  int number_data_points = std::stod(argv[3]);
 
   std::string output_file = output_file_PREFIX +
-    "-sigma_x-" + argv[5] +
-    "-sigma_y-" + argv[6] +
-    "-rho-" + argv[4] +
-    "-dx-likelihood-" + std::to_string(dx_likelihood) +
     "-nparticles-" + argv[2] + "-" +
-    argv[8] + ".csv";
+    argv[4] + ".csv";
 
   std::cout << "output_file = " << output_file << std::endl;
 
@@ -50,11 +42,10 @@ int main(int argc, char *argv[]) {
 #pragma omp threadprivate(counter)
 
   static BivariateGaussianKernelBasis* private_bases;
-  static gsl_rng * r_ptr;
-#pragma omp threadprivate(private_bases, r_ptr)
+#pragma omp threadprivate(private_bases)
 
   long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-  //  seed = 10;
+  // seed = 10;
 
   gsl_rng * r_ptr_local;
   const gsl_rng_type * Type;
@@ -106,7 +97,7 @@ int main(int argc, char *argv[]) {
 
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
-    log_weights[i] = 0.0;
+    log_weights[i] = -log(N);
   }
 
 
@@ -177,31 +168,36 @@ int main(int argc, char *argv[]) {
     			    prior_rho_leverage,
     			    N_particles,
     			    r_ptr_local);
-  std::vector<parameters> params_t = params_tm1;
+  //  setting param values to true values
+  for (auto & current_params : params_tm1) {
+    double current_theta_x = current_params.theta_x;
+    current_params = params;
+    current_params.theta_x = current_theta_x;
+  }
+  std::vector<parameters> params_t (N_particles);
 
-  gsl_vector* scaled_mean_prior = compute_parameters_mean(params_tm1);
-  gsl_matrix* scaled_cov_prior = compute_parameters_cov(scaled_mean_prior,
-							params_tm1);
-  FILE * cov_matrix_prior = fopen ("cov_prior.dat", "wb");
-  gsl_matrix_fwrite(cov_matrix_prior, scaled_cov_prior);
-  fclose(cov_matrix_prior);
-  double diag [13];
-  gsl_vector_view diag_view = gsl_vector_view_array(diag, 13);
-  gsl_vector_view scaled_cov_prior_diag = gsl_matrix_diagonal(scaled_cov_prior);
-  gsl_vector_memcpy(&diag_view.vector, &scaled_cov_prior_diag.vector);
-  gsl_matrix_set_zero(scaled_cov_prior);
-  gsl_vector_memcpy(&scaled_cov_prior_diag.vector, &diag_view.vector);
+//   gsl_vector* scaled_mean_prior = compute_parameters_mean(params_tm1);
+//   gsl_matrix* scaled_cov_prior = compute_parameters_cov(scaled_mean_prior,
+// 							params_tm1);
+//   FILE * cov_matrix_prior = fopen ("cov_prior.dat", "wb");
+//   gsl_matrix_fwrite(cov_matrix_prior, scaled_cov_prior);
+//   fclose(cov_matrix_prior);
+//   double diag [13];
+//   gsl_vector_view diag_view = gsl_vector_view_array(diag, 13);
+//   gsl_vector_view scaled_cov_prior_diag = gsl_matrix_diagonal(scaled_cov_prior);
+//   gsl_vector_memcpy(&diag_view.vector, &scaled_cov_prior_diag.vector);
+//   gsl_matrix_set_zero(scaled_cov_prior);
+//   gsl_vector_memcpy(&scaled_cov_prior_diag.vector, &diag_view.vector);
 
-  std::vector<stoch_vol_datum> theta_tm1 = sample_theta_prior(params,
-							      N_particles,
-							      r_ptr_local);
+  std::vector<stoch_vol_datum> theta_tm1 = std::vector<stoch_vol_datum> (N_particles,
+									 thetas[0]);
   std::vector<stoch_vol_datum> theta_t = theta_tm1;
-  print_params(params);
+//   print_params(params);
 
-  std::vector<unsigned> ks = std::vector<unsigned> (N_particles, 1);
+   std::vector<unsigned> ks = std::vector<unsigned> (N_particles, 1);
 
-  std::vector<unsigned> particle_indeces = std::vector<unsigned> (N_particles);
-  std::iota(std::begin(particle_indeces), std::end(particle_indeces), 0);
+   std::vector<unsigned> particle_indeces = std::vector<unsigned> (N_particles);
+   std::iota(std::begin(particle_indeces), std::end(particle_indeces), 0);
 
   std::ofstream mean_levels;
   mean_levels.open(output_file);
@@ -229,109 +225,89 @@ int main(int argc, char *argv[]) {
 	      << "ess\n";
   mean_levels.close();
 
-  double dx = 1.0/500.0;
-  double power = 1.0;
-  double std_dev_factor = 1.0;
+//   double dx = 1.0/500.0;
+//   double power = 1.0;
+//   double std_dev_factor = 1.0;
 
-  BivariateGaussianKernelBasis basis_positive =
-    BivariateGaussianKernelBasis(dx,
-				 rho_basis,
-				 sigma_x,
-				 sigma_y,
-				 power,
-				 std_dev_factor);
+//   BivariateGaussianKernelBasis basis_positive =
+//     BivariateGaussianKernelBasis(dx,
+// 				 rho_basis,
+// 				 sigma_x,
+// 				 sigma_y,
+// 				 power,
+// 				 std_dev_factor);
 
-  // BASES COPY FOR THREADS START
-  int tid = 0;
-  unsigned i = 0;
+//   // BASES COPY FOR THREADS START
+//   int tid = 0;
+//   unsigned i = 0;
 
-  std::cout << "copying bases vectors for threads as private variables" << std::endl;
-  auto t1 = std::chrono::high_resolution_clock::now();
+//   std::cout << "copying bases vectors for threads as private variables" << std::endl;
+//   auto t1 = std::chrono::high_resolution_clock::now();
 
-#pragma omp parallel default(none) private(tid, i) shared(basis_positive, seed, Type)
-  {
-    tid = omp_get_thread_num();
+// #pragma omp parallel default(none) private(tid, i) shared(basis_positive, seed, Type)
+//   {
+//     tid = omp_get_thread_num();
 
-    private_bases = new BivariateGaussianKernelBasis();
-    (*private_bases) = basis_positive;
+//     private_bases = new BivariateGaussianKernelBasis();
+//     (*private_bases) = basis_positive;
 
-    r_ptr = gsl_rng_alloc(Type);
-    gsl_rng_set(r_ptr, seed + tid + 1);
+//     r_ptr = gsl_rng_alloc(Type);
+//     gsl_rng_set(r_ptr, seed + tid + 1);
 
-    printf("Thread %d: counter %d\n", tid, counter);
-  }
-  auto t2 = std::chrono::high_resolution_clock::now();
-  std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
-  std::cout << "DONE copying bases vectors for threads as private variables" << std::endl;
-  std::cout << std::endl;
-  // BAsES COPY FOR THREADS END
+//     printf("Thread %d: counter %d\n", tid, counter);
+//   }
+//   auto t2 = std::chrono::high_resolution_clock::now();
+//   std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
+//   std::cout << "DONE copying bases vectors for threads as private variables" << std::endl;
+//   std::cout << std::endl;
+//   // BAsES COPY FOR THREADS END
 
-  // BivariateGaussianKernelBasis basis_negative =
-  // BivariateGaussianKernelBasis(dx, -0.6, sigma,power,std_dev_factor);
+//   // BivariateGaussianKernelBasis basis_negative =
+//   // BivariateGaussianKernelBasis(dx, -0.6, sigma,power,std_dev_factor);
 
   for (unsigned tt=1; tt<N; ++tt) {
+    //
     observable_datum y_t = ys[tt];
     observable_datum y_tm1 = ys[tt-1];
+    double scale_a = 0.99;
+    
+    auto t1 = std::chrono::high_resolution_clock::now();
 
-    double scale_a = 0.5;
-
-    t1 = std::chrono::high_resolution_clock::now();
-
-    std::cout  << "c(";
-    for (parameters current_params : params_tm1) {
+    std::cout  << "alpha_x_vec = c(";
+    for (auto & current_params : params_tm1) {
       std::cout << current_params.alpha_x << ",";
+    }
+    std::cout << ")" << std::endl;
+    std::cout  << "alpha_y_vec = c(";
+    for (auto & current_params : params_tm1) {
+      std::cout << current_params.alpha_y << ",";
+    }
+    std::cout << ")" << std::endl;
+    std::cout  << "alpha_rho_vec = c(";
+    for (auto & current_params : params_tm1) {
+      std::cout << current_params.alpha_rho << ",";
     }
     std::cout << ")" << std::endl;
 
     gsl_vector* scaled_mean = compute_parameters_mean(params_tm1);
+    gsl_matrix* sampling_covariance = compute_parameters_cov(scaled_mean,
+							     params_tm1);
+    gsl_vector_scale(scaled_mean, 1.0-scale_a);
+
     std::cout << "alpha_x_mean = " << gsl_vector_get(scaled_mean, 2) << std::endl;
+    std::cout << "alpha_x_var = " << gsl_matrix_get(sampling_covariance, 2, 2) << std::endl;
 
-    gsl_matrix* scaled_cov = compute_parameters_cov(scaled_mean,
-    						    params_tm1);
-    std::cout << "alpha_x_var = " << gsl_matrix_get(scaled_cov, 2, 2) << std::endl;
-
-
-    gsl_vector_scale(scaled_mean, (1.0-scale_a));
-    gsl_matrix_scale(scaled_cov,  (1.0-scale_a*scale_a));
-
-
-    // TO CHECK IF THE COV IS POS DEF START //
-    gsl_error_handler_t* old_handler = gsl_set_error_handler_off();
-    gsl_matrix* work = gsl_matrix_alloc(13, 13);
-    gsl_matrix_memcpy(work, scaled_cov);
-
-    int status = gsl_linalg_cholesky_decomp(work);
-    if (status == GSL_EDOM) {
-      gsl_vector_view diag_view = gsl_matrix_diagonal(scaled_cov);
-      gsl_vector* diag_cpy = gsl_vector_alloc(13);
-      gsl_vector_memcpy(diag_cpy, &diag_view.vector);
-
-      gsl_matrix_set_zero(scaled_cov);
-      gsl_vector_memcpy(&diag_view.vector, diag_cpy);
-      
-      // we need to check for non-zero diagonal entries too
-      for (unsigned i=0; i<13; ++i) {
-	if ( gsl_matrix_get(scaled_cov,i,i) < std::numeric_limits<double>::epsilon() ) {
-	  double candidates[] = {std::pow(gsl_vector_get(scaled_mean,i), 2),
-				 std::numeric_limits<double>::epsilon() * 10};
-	  
-	  gsl_matrix_set(scaled_cov, i,i,
-			 *std::max_element(candidates, candidates+2));
-	}
-      }
-    }
+    std::cout << "alpha_y_mean = " << gsl_vector_get(scaled_mean, 3) << std::endl;
+    std::cout << "alpha_y_var = " << gsl_matrix_get(sampling_covariance, 3, 3) << std::endl;
 
     // OUTPUTTING MATRIX START
     FILE * cov_matrix = fopen ("scaled_cov.dat", "wb");
-    gsl_matrix_fwrite(cov_matrix, scaled_cov);
+    gsl_matrix_fwrite(cov_matrix, sampling_covariance);
     fclose(cov_matrix);
     // OUTPUTTING MATRIX END
+    print_matrix(sampling_covariance, 13, 13);
 
-    gsl_set_error_handler(old_handler);
-    gsl_matrix_free(work);
-    // TO CHECK IF THE COV IS POS DEF END //
-
-    t2 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::high_resolution_clock::now();
     std::cout << "\nmean cov computation times = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
 
     std::vector<stoch_vol_datum> theta_t_mean =
@@ -340,41 +316,47 @@ int main(int argc, char *argv[]) {
   		      y_tm1,
   		      params_tm1);
 
+    std::cout << "alpha_x_prev = ";
+    for (auto & current_params_mean : params_tm1) {
+      std::cout << current_params_mean.alpha_x << ",";
+    }
+    std::cout << std::endl;
+
     std::vector<parameters> params_t_mean = 
       parameters_next_mean(params_tm1,
       			   scaled_mean,
       			   scale_a);
 
+    std::cout << "\nalpha_x_means = ";
+    for (auto & current_params_mean : params_t_mean) {
+      std::cout << current_params_mean.alpha_x << ",";
+    }
+    std::cout << std::endl;
+
     std::vector<double> lls (N_particles);
 
-    t1 = std::chrono::high_resolution_clock::now();
-#pragma omp parallel default(none) private(i) shared(lls, theta_t_mean, params_t_mean, N_particles) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
-    {
-#pragma omp for
-      for (i=0; i<N_particles; ++i) {
-	double likelihood = log_likelihood(y_t,
-					   y_tm1,
-					   theta_t_mean[i],
-					   params_t_mean[i]);
-	lls[i] = likelihood;
-	printf("Thread %d with address %p produces likelihood %f where &params=%p\n",
-	       omp_get_thread_num(),
-	       private_bases,
-	       likelihood,
-	       &params);
-      }
+    for (unsigned i=0; i<N_particles; ++i) {
+      double likelihood = log_likelihood(y_t,
+					 y_tm1,
+					 theta_t_mean[i],
+					 params_t_mean[i]);
+      lls[i] = likelihood;
+      printf("Thread %d with address %p produces likelihood %f where &params=%p\n",
+	     omp_get_thread_num(),
+	     private_bases,
+	     likelihood,
+	     &params);
     }
-    t2 = std::chrono::high_resolution_clock::now();
-    std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
-	      << " milliseconds" << std::endl;
+  
 
     for (unsigned i=0; i<lls.size(); ++i) {
-      std::cout << "lls[" << i << "] = " << lls[i] << std::endl;
+      std::cout << "lls[" << i << "] = " << lls[i] 
+		<< " with mean_alpha_x = " << params_t_mean[i].alpha_x
+		<< std::endl;
     }
 
     auto compare = [&lls, &log_weights](unsigned i, unsigned j)
       { return lls[i] + log_weights[i] < lls[j] + log_weights[j]; };
-
     auto max_index_ptr = std::max_element(std::begin(particle_indeces),
 					  std::end(particle_indeces),
 					  compare);
@@ -393,60 +375,59 @@ int main(int argc, char *argv[]) {
       ks[i] = gsl_ran_discrete(r_ptr_local, particle_sampler);
     }
 
-    // SAMPLING PARAMTERS AND VOLATILITIES START 
-    t1 = std::chrono::high_resolution_clock::now();
-    unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(tt, lls, N_particles, ks, log_weights, thetas, theta_tm1, theta_t, params_tm1, params_t, scaled_cov, params_t_mean, priors_x, priors_y, priors_rho, prior_rho_leverage, scaled_cov_prior) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
-    {
-#pragma omp for
-      for (m=0; m<N_particles; ++m) {
-	double scaled_cov_array [13*13];
-	gsl_matrix_view scaled_cov_view =
-	  gsl_matrix_view_array(scaled_cov_array, 13, 13);
-	gsl_matrix_memcpy(&scaled_cov_view.matrix, scaled_cov);
+
+    for (unsigned m=0; m<N_particles; ++m) {
+	double sampling_covariance_array [13*13];
+	gsl_matrix_view sampling_covariance_view =
+	  gsl_matrix_view_array(sampling_covariance_array, 13, 13);
+	gsl_matrix_memcpy(&sampling_covariance_view.matrix, sampling_covariance);
+	gsl_matrix_scale(&sampling_covariance_view.matrix, 1.0-scale_a*scale_a);
 
 	unsigned k = ks[m];
 
 	gsl_vector * params_t_mean_gsl = parameters_to_reals(params_t_mean[k]);
 	MultivariateNormal mvnorm = MultivariateNormal();
 	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
-	mvnorm.rmvnorm(r_ptr,
+	mvnorm.rmvnorm(r_ptr_local,
 		       13,
 		       params_t_mean_gsl,
-		       &scaled_cov_view.matrix,
+		       &sampling_covariance_view.matrix,
 		       params_t_sample_gsl);
+
+	gsl_vector_set(params_t_sample_gsl, 5, 
+		       gsl_vector_get(params_t_mean_gsl, 5) + gsl_ran_gaussian(r_ptr_local, sqrt(0.001)));
+
 	parameters params_t_sample = reals_to_parameters(params_t_sample_gsl);
+	gsl_vector_free(params_t_sample_gsl);
+	gsl_vector_free(params_t_mean_gsl);
 
 	// TESTING MANUALLY START
-	params_t_sample.mu_x = priors_x.get_mu_prior().get_mu_mean();
-	params_t_sample.mu_y = priors_y.get_mu_prior().get_mu_mean();
+	params_t_sample.mu_x = params.mu_x;
+	params_t_sample.mu_y = params.mu_y;
 
-	// params_t_sample.alpha_x = priors_x.get_alpha_prior().get_alpha_mean();
-	params_t_sample.alpha_y = priors_y.get_alpha_prior().get_alpha_mean();
-	params_t_sample.alpha_rho = priors_rho.get_alpha_prior().get_alpha_mean();
+	params_t_sample.alpha_x = params.alpha_x;
+	params_t_sample.alpha_y = params.alpha_y;
+	params_t_sample.alpha_rho = params.alpha_rho;
 
-	params_t_sample.theta_x = priors_x.get_theta_prior().get_theta_mean();
-	params_t_sample.theta_y = priors_y.get_theta_prior().get_theta_mean();
-	params_t_sample.theta_rho = priors_rho.get_theta_prior().get_theta_mean();
+	//	params_t_sample.theta_x = params.theta_x;
+	params_t_sample.theta_y = params.theta_y;
+	params_t_sample.theta_rho = params.theta_rho;
 
-	params_t_sample.tau_x = sqrt(priors_x.get_tau_square_prior().get_tau_square_mean());
-	params_t_sample.tau_y = sqrt(priors_y.get_tau_square_prior().get_tau_square_mean());
-	params_t_sample.tau_rho = sqrt(priors_rho.get_tau_square_prior().get_tau_square_mean());
+	params_t_sample.tau_x = params.tau_x;
+	params_t_sample.tau_y = params.tau_y;
+	params_t_sample.tau_rho = params.tau_rho;
 
-	params_t_sample.leverage_x_rho = prior_rho_leverage.get_rho_mean();
-	params_t_sample.leverage_y_rho = prior_rho_leverage.get_rho_mean();
+	params_t_sample.leverage_x_rho = params.leverage_x_rho;
+	params_t_sample.leverage_y_rho = params.leverage_y_rho;
 	// TESTING MANUALLY END
-	
-	params_t[m] = params_t_sample;
+
+ 	params_t[m] = params_t_sample;
 	theta_t[m] = sample_theta(theta_tm1[k],
 				  y_t,
 				  y_tm1,
 				  params_t_sample,
-				  r_ptr);
-	theta_t[m] = thetas[tt];
-
-	gsl_vector_free(params_t_sample_gsl);
-	gsl_vector_free(params_t_mean_gsl);
+				  r_ptr_local);
+ 	theta_t[m] = thetas[tt];
 
 	double log_new_weight = 0.0;
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
@@ -464,35 +445,33 @@ int main(int argc, char *argv[]) {
 	    log_new_weight = -1.0*std::numeric_limits<double>::infinity();
 	  }
 	}
+   
 
-	printf("on likelihood %d: sigma_x = %f, sigma_y = %f, rho = %f, log_new_weight = %f\n",
+	printf("on likelihood %d: sigma_x = %f, sigma_y = %f, rho = %f, alpha_x = %f, log_new_weight = %f\n",
 	       k,
 	       exp(theta_t[m].log_sigma_x),
 	       exp(theta_t[m].log_sigma_y),
 	       exp(theta_t[m].rho_tilde)/(exp(theta_t[m].rho_tilde) + 1)*2.0-1.0,
+	       params_t[m].alpha_x,
 	       log_new_weight);
 	log_weights[m] = log_new_weight;
-      }
     }
     t2 = std::chrono::high_resolution_clock::now();
     std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
 	      << " milliseconds" << std::endl;
     // SAMPLING PARAMTERS AND VOLATILITIES END
 
-    gsl_matrix_free(scaled_cov);
+    std::cout << "\nBefore normalizing, the weights are\n";
+    for (auto& log_weight : log_weights) {
+      std::cout << log_weight << " ";
+    }
+    std::cout << "\n" << std::endl;
+
+    gsl_matrix_free(sampling_covariance);
     gsl_vector_free(scaled_mean);
 
-    // auto max_weight_iter_ptr = std::max_element(std::begin(log_weights),
-    // 						std::end(log_weights));
-    // // normalizing weights
-    // std::transform(log_weights.begin(), log_weights.end(), log_weights.begin(),
-    // 		   [&max_weight_iter_ptr, &log_weights](double log_weight)
-    // 		   {
-    // 		     return log_weight - log_weights[*max_weight_iter_ptr];
-    // 		   });
-
     double sum_of_weights = 0.0;
-    for (double log_weight : log_weights) {
+    for (auto& log_weight : log_weights) {
       sum_of_weights = sum_of_weights + exp(log_weight);
     }
 
@@ -501,6 +480,12 @@ int main(int argc, char *argv[]) {
 		   {
 		     return log_weight - log(sum_of_weights);
 		   });
+
+    std::cout << "\nAfter normalizing, the weights are\n";
+    for (auto& log_weight : log_weights) {
+      std::cout << log_weight << " ";
+    }
+    std::cout << "\n" << std::endl;
 
     theta_tm1 = theta_t;
     params_tm1 = params_t;
@@ -530,8 +515,8 @@ int main(int argc, char *argv[]) {
   }
 
   gsl_rng_free(r_ptr_local);
-  gsl_vector_free(scaled_mean_prior);
-  gsl_matrix_free(scaled_cov_prior);
+//   gsl_vector_free(scaled_mean_prior);
+//   gsl_matrix_free(scaled_cov_prior);
   
   return 0;
 }

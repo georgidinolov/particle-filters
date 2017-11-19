@@ -25,6 +25,7 @@ struct parameters {
   double leverage_y_rho;
   //
   unsigned parameters_number = 13;
+
 };
 void print_params(const parameters& params);
 
@@ -134,11 +135,9 @@ void generate_data(std::vector<observable_datum>& ys,
 		   unsigned buffer,
 		   bool SWITCH_XY);
 
-gsl_vector*  compute_parameters_mean(const std::vector<parameters>& params_t,
-				     const std::vector<double>& log_weights);
+gsl_vector*  compute_parameters_mean(const std::vector<parameters>& params_t);
 gsl_matrix*  compute_parameters_cov(const gsl_vector* mean,
-				    const std::vector<parameters>& params_t,
-				    const std::vector<double>& log_weights);
+				    const std::vector<parameters>& params_t);
 void print_vector(const gsl_vector* mean,
 		  unsigned size);
 void print_matrix(const gsl_matrix* cov,
@@ -146,3 +145,5 @@ void print_matrix(const gsl_matrix* cov,
 
 gsl_vector* parameters_to_reals(const parameters& params);
 parameters reals_to_parameters(const gsl_vector* params);
+
+void print_matrix(const gsl_matrix* mat, unsigned size_x, unsigned size_y);
