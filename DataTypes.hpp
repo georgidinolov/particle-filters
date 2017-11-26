@@ -1,9 +1,56 @@
 #include "BivariateSolver.hpp"
 #include <cmath>
+#include <gsl/gsl_matrix.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_vector.h>
 #include "PriorTypes.hpp"
 #include <vector>
+
+struct NormalInverseWishartParameters {
+  unsigned dimension;
+  //
+  gsl_vector* mu_not;
+  gsl_matrix* inverse_scale_mat;
+  //
+  double lambda;
+  double deg_freedom;
+
+  NormalInverseWishartParameters()
+    : dimension(13),
+      lambda(1.0),
+      deg_freedom(13)
+  {
+    mu_not = gsl_vector_alloc(dimension);
+    inverse_scale_mat = gsl_matrix_calloc(dimension, dimension);
+  };
+
+  ~NormalInverseWishartParameters() {
+    gsl_vector_free(mu_not);
+    gsl_matrix_free(inverse_scale_mat);
+  };
+
+  NormalInverseWishartParameters & operator=(const NormalInverseWishartParameters &rhs)
+  {
+    if (this==&rhs) {
+      return *this;
+    } else {
+      dimension = rhs.dimension;
+      lambda = rhs.lambda;
+      deg_freedom = rhs.deg_freedom;
+
+      gsl_vector_free(mu_not);
+      gsl_matrix_free(inverse_scale_mat);
+
+      mu_not = gsl_vector_alloc(dimension);
+      inverse_scale_mat = gsl_matrix_alloc(dimension, dimension);
+
+      gsl_vector_memcpy(mu_not, rhs.mu_not);
+      gsl_matrix_memcpy(inverse_scale_mat, rhs.inverse_scale_mat);
+      return *this;
+    }
+  }
+};
 
 struct parameters {
   double mu_x;
@@ -39,6 +86,20 @@ struct observable_datum {
   double y_t;
   double a_y;
   double b_y;
+
+  friend std::ostream& operator << (std::ostream& stream, const observable_datum& datum)
+  {
+    stream << "x_tm1 = " << datum.x_tm1 << "\n";
+    stream << "x_t = " << datum.x_t << "\n";
+    stream << "a_x = " << datum.a_x << "\n";
+    stream << "b_x = " << datum.b_x << "\n";
+    //
+    stream << "y_tm1 = " << datum.y_tm1 << "\n";
+    stream << "y_t = " << datum.y_t << "\n";
+    stream << "a_y = " << datum.a_y << "\n";
+    stream << "b_y = " << datum.b_y << "\n";
+    return stream;
+  }
 };
 
 struct stoch_vol_datum {
@@ -92,6 +153,10 @@ double log_likelihood(const observable_datum& y_t,
 		      const stoch_vol_datum& theta_t,
 		      const parameters& params);
 
+double log_likelihood(const stoch_vol_datum& theta_t,
+		      const stoch_vol_datum& theta_tm1,
+		      const parameters& params);
+
 std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
 					 const observable_datum& y_tm1,
 					 const std::vector<stoch_vol_datum>& theta_t,
@@ -126,6 +191,8 @@ std::vector<double> compute_quantiles(const std::vector<stoch_vol_datum>& theta_
 
 std::vector<double> compute_quantiles(const std::vector<parameters>& params_t,
 				      const std::vector<double>& log_weights);
+
+std::vector<observable_datum> read_data_from_csv(std::string file);
 
 void generate_data(std::vector<observable_datum>& ys,
  		   std::vector<stoch_vol_datum>& thetas,

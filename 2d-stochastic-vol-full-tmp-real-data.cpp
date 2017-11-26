@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(40);
+  omp_set_num_threads(2);
 
   static int counter = 0;
 #pragma omp threadprivate(counter)
@@ -81,20 +81,11 @@ int main(int argc, char *argv[]) {
   params.leverage_y_rho = 0;
 
   unsigned N = T/Delta;
-  std::vector<observable_datum> ys (N);
-  std::vector<stoch_vol_datum> thetas (N);
 
   long unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   seed = 10;
 
-  unsigned buffer = 0;
-  generate_data(ys,
-		thetas,
-		params,
-		6.5*3600*1,
-		10,
-		buffer,
-		false);
+  std::vector<observable_datum> ys = read_data_from_csv("/home/gdinolov/PDE-solvers/spy_ftse.csv");
 
   std::vector<double> log_weights (N_particles);
   for (unsigned i=0; i<N_particles; ++i) {
@@ -262,12 +253,10 @@ int main(int argc, char *argv[]) {
     double scale_a = 0.99;
 
     t1 = std::chrono::high_resolution_clock::now();
-    gsl_vector* scaled_mean = compute_parameters_mean(params_tm1,
-    						      log_weights);
+    gsl_vector* scaled_mean = compute_parameters_mean(params_tm1);
 
     gsl_matrix* scaled_cov = compute_parameters_cov(scaled_mean,
-    						    params_tm1,
-    						    log_weights);
+    						    params_tm1);
     
 
     gsl_vector_scale(scaled_mean, (1.0-scale_a));

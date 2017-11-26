@@ -117,9 +117,9 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
     out[i].alpha_rho = prior_rho.get_alpha_prior().get_alpha_mean() +
       gsl_ran_gaussian(r, prior_rho.get_alpha_prior().get_alpha_std_dev());
     //
-    out[i].theta_x = gsl_ran_gamma(r,
-				   prior_x.get_theta_prior().get_theta_shape(),
-				   prior_x.get_theta_prior().get_theta_scale());
+    out[i].theta_x = 0.8 + 
+      gsl_ran_gaussian(r, 0.2);
+		       //		       prior_x.get_theta_prior().get_theta_std_dev());
 
     out[i].theta_y = gsl_ran_gamma(r,
 				   prior_y.get_theta_prior().get_theta_shape(),
@@ -324,6 +324,30 @@ double log_likelihood(const observable_datum& y_t,
 					      &gsl_cov.matrix);
   return out;
 
+}
+
+double log_likelihood(const stoch_vol_datum& theta_t,
+		      const stoch_vol_datum& theta_tm1,
+		      const parameters& params)
+{
+
+  // x likelihood
+  double point = (theta_t.log_sigma_x - params.alpha_x) -
+    params.theta_x*(theta_tm1.log_sigma_x - params.alpha_x);
+  double likelihood_x = log(gsl_ran_gaussian_pdf(point, params.tau_x));
+
+  // y likelihood
+  point = (theta_t.log_sigma_y - params.alpha_y) -
+    params.theta_y*(theta_tm1.log_sigma_y - params.alpha_y);
+  double likelihood_y = log(gsl_ran_gaussian_pdf(point, params.tau_y));
+
+  // rho likelihood
+  point = (theta_t.rho_tilde - params.alpha_rho) -
+    params.theta_rho*(theta_tm1.rho_tilde - params.alpha_rho);
+  double likelihood_rho = log(gsl_ran_gaussian_pdf(point, params.tau_rho));
+  
+  double out = likelihood_x;
+  return out;
 }
 
 std::vector<double> log_likelihoods_OCHL(const observable_datum& y_t,
@@ -715,6 +739,85 @@ std::vector<double> compute_quantiles(const std::vector<parameters>& params_t,
     out[2*i+1] = sum_sq[i] - sum[i]*sum[i];
   }
 
+  return out;
+}
+
+std::vector<observable_datum> read_data_from_csv(std::string file)
+{
+  std::ifstream data_file(file);
+  std::string value;
+  std::vector<observable_datum> out (0);
+  
+  if (data_file.is_open()) {
+    // go through the header
+    for (unsigned i=0; i<14; ++i) {
+      if (i<13) {
+	std::getline(data_file,value,',');
+      } else {
+	std::getline(data_file,value);
+      }
+    }
+
+    // first values is date
+    while (std::getline(data_file, value, ',')) {
+
+      observable_datum current_datum;
+      
+      // second value is FTSE open
+      std::getline(data_file, value, ',');
+      double ftse_open = log(std::stod(value));
+      current_datum.x_tm1 = ftse_open;
+
+      // third value is FTSE high
+      std::getline(data_file, value, ',');
+      double ftse_high = log(std::stod(value));
+      current_datum.b_x = ftse_high;
+
+      // fourth value is FTSE low
+      std::getline(data_file, value, ',');
+      double ftse_low = log(std::stod(value));
+      current_datum.a_x = ftse_low;
+
+      // fifth value is FTSE close
+      std::getline(data_file, value, ',');
+      double ftse_close = log(std::stod(value));
+      current_datum.x_t = ftse_close;
+
+      std::getline(data_file, value, ',');
+      std::getline(data_file, value, ',');
+      std::getline(data_file, value, ',');
+
+      // ninth value is SPY open
+      std::getline(data_file, value, ',');
+      double spy_open = log(std::stod(value));
+      current_datum.y_tm1 = spy_open;
+
+      // tenth value is SPY high
+      std::getline(data_file, value, ',');
+      double spy_high = log(std::stod(value));
+      current_datum.b_y = spy_high;
+
+      // 11th value is SPY low
+      std::getline(data_file, value, ',');
+      double spy_low = log(std::stod(value));
+      current_datum.a_y = spy_low;
+
+      // 12th value is SPY close
+      std::getline(data_file, value, ',');
+      double spy_close = log(std::stod(value));
+      current_datum.y_t = spy_close;
+
+      std::getline(data_file, value, ',');
+      std::getline(data_file, value);
+
+      out.push_back(current_datum);
+    }
+  }
+
+  for (unsigned i=0; i<out.size(); ++i) {
+    std::cout << out[i] << std::endl;
+  }
+  
   return out;
 }
 

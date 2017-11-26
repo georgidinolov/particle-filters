@@ -67,15 +67,15 @@ int main(int argc, char *argv[]) {
   params.mu_x = 0; // setting it to zero artificically
   params.mu_y = 0;
 
-  params.alpha_x = alpha_hat + 1.0/2.0*log(Delta);
+  params.alpha_x = 0;//alpha_hat + 1.0/2.0*log(Delta);
   params.alpha_y = alpha_hat + 1.0/2.0*log(Delta);
   // params.alpha_x = 0;
   // params.alpha_y = 0;
 
-  params.theta_x = exp(-theta_hat * 1.0*Delta);
+  params.theta_x = 0.8; //exp(-theta_hat * 1.0*Delta);
   params.theta_y = exp(-theta_hat * 1.0*Delta);
 
-  params.tau_x = tau_hat * sqrt((1 - exp(-2*theta_hat*Delta))/(2*theta_hat));
+  params.tau_x = 1.0; //tau_hat * sqrt((1 - exp(-2*theta_hat*Delta))/(2*theta_hat));
   params.tau_y = tau_hat * sqrt((1 - exp(-2*theta_hat*Delta))/(2*theta_hat));
   params.tau_rho = 0.1;
 
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
   // PARAMS START
   double mu_hat_std_dev = 1e-11;
 
-  double theta_hat_std_dev = 1e-9;
+  double theta_hat_std_dev = 1e-10;
 
   double alpha_hat_std_dev = 1;
 
@@ -169,11 +169,14 @@ int main(int argc, char *argv[]) {
     			    N_particles,
     			    r_ptr_local);
   //  setting param values to true values
+  std::cout << "theta.x.prior = c(";
   for (auto & current_params : params_tm1) {
     double current_theta_x = current_params.theta_x;
     current_params = params;
     current_params.theta_x = current_theta_x;
+    std::cout << current_theta_x << " ";
   }
+  std::cout << ")" << std::endl;
   std::vector<parameters> params_t (N_particles);
 
 //   gsl_vector* scaled_mean_prior = compute_parameters_mean(params_tm1);
@@ -222,6 +225,7 @@ int main(int argc, char *argv[]) {
     //
 	      << "mean_leverage_x_rho_transformed, var_leverage_x_rho_transformed,"
 	      << "mean_leverage_y_rho_transformed, var_leverage_y_rho_transformed,"
+	      << "theta_x_mean, theta_x_var,"
 	      << "ess\n";
   mean_levels.close();
 
@@ -273,32 +277,10 @@ int main(int argc, char *argv[]) {
     
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    std::cout  << "alpha_x_vec = c(";
-    for (auto & current_params : params_tm1) {
-      std::cout << current_params.alpha_x << ",";
-    }
-    std::cout << ")" << std::endl;
-    std::cout  << "alpha_y_vec = c(";
-    for (auto & current_params : params_tm1) {
-      std::cout << current_params.alpha_y << ",";
-    }
-    std::cout << ")" << std::endl;
-    std::cout  << "alpha_rho_vec = c(";
-    for (auto & current_params : params_tm1) {
-      std::cout << current_params.alpha_rho << ",";
-    }
-    std::cout << ")" << std::endl;
-
     gsl_vector* scaled_mean = compute_parameters_mean(params_tm1);
     gsl_matrix* sampling_covariance = compute_parameters_cov(scaled_mean,
 							     params_tm1);
     gsl_vector_scale(scaled_mean, 1.0-scale_a);
-
-    std::cout << "alpha_x_mean = " << gsl_vector_get(scaled_mean, 2) << std::endl;
-    std::cout << "alpha_x_var = " << gsl_matrix_get(sampling_covariance, 2, 2) << std::endl;
-
-    std::cout << "alpha_y_mean = " << gsl_vector_get(scaled_mean, 3) << std::endl;
-    std::cout << "alpha_y_var = " << gsl_matrix_get(sampling_covariance, 3, 3) << std::endl;
 
     // OUTPUTTING MATRIX START
     FILE * cov_matrix = fopen ("scaled_cov.dat", "wb");
@@ -316,39 +298,27 @@ int main(int argc, char *argv[]) {
   		      y_tm1,
   		      params_tm1);
 
-    std::cout << "alpha_x_prev = ";
-    for (auto & current_params_mean : params_tm1) {
-      std::cout << current_params_mean.alpha_x << ",";
-    }
-    std::cout << std::endl;
-
     std::vector<parameters> params_t_mean = 
       parameters_next_mean(params_tm1,
       			   scaled_mean,
       			   scale_a);
 
-    std::cout << "\nalpha_x_means = ";
-    for (auto & current_params_mean : params_t_mean) {
-      std::cout << current_params_mean.alpha_x << ",";
-    }
-    std::cout << std::endl;
-
     std::vector<double> lls (N_particles);
 
     for (unsigned i=0; i<N_particles; ++i) {
-      double likelihood = log_likelihood(y_t,
-					 y_tm1,
-					 theta_t_mean[i],
+      double likelihood = log_likelihood(thetas[tt],
+					 thetas[tt-1],
 					 params_t_mean[i]);
       lls[i] = likelihood;
-      printf("Thread %d with address %p produces likelihood %f where &params=%p\n",
+      printf("Thread %d with address %p produces likelihood %f where theta_x_mean=%f and log_sigma_x_t = %f and log_sigma_x_tm1 = %f\n",
 	     omp_get_thread_num(),
 	     private_bases,
 	     likelihood,
-	     &params);
+	     params_t_mean[i].theta_x,
+	     thetas[tt].log_sigma_x,
+	     thetas[tt-1].log_sigma_x);
     }
   
-
     for (unsigned i=0; i<lls.size(); ++i) {
       std::cout << "lls[" << i << "] = " << lls[i] 
 		<< " with mean_alpha_x = " << params_t_mean[i].alpha_x
@@ -377,25 +347,29 @@ int main(int argc, char *argv[]) {
 
 
     for (unsigned m=0; m<N_particles; ++m) {
-	double sampling_covariance_array [13*13];
-	gsl_matrix_view sampling_covariance_view =
-	  gsl_matrix_view_array(sampling_covariance_array, 13, 13);
-	gsl_matrix_memcpy(&sampling_covariance_view.matrix, sampling_covariance);
-	gsl_matrix_scale(&sampling_covariance_view.matrix, 1.0-scale_a*scale_a);
+      double sampling_covariance_array [13*13];
+      gsl_matrix_view sampling_covariance_view =
+	gsl_matrix_view_array(sampling_covariance_array, 13, 13);
+      gsl_matrix_memcpy(&sampling_covariance_view.matrix, sampling_covariance);
+      gsl_matrix_scale(&sampling_covariance_view.matrix, 1.0-scale_a*scale_a);
+      
+      unsigned k = ks[m];
+      
+      gsl_vector * params_t_mean_gsl = parameters_to_reals(params_t_mean[k]);
+      MultivariateNormal mvnorm = MultivariateNormal();
+      gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
 
-	unsigned k = ks[m];
+      mvnorm.rmvnorm(r_ptr_local,
+		     13,
+		     params_t_mean_gsl,
+		     &sampling_covariance_view.matrix,
+		     params_t_sample_gsl);
 
-	gsl_vector * params_t_mean_gsl = parameters_to_reals(params_t_mean[k]);
-	MultivariateNormal mvnorm = MultivariateNormal();
-	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
-	mvnorm.rmvnorm(r_ptr_local,
-		       13,
-		       params_t_mean_gsl,
-		       &sampling_covariance_view.matrix,
-		       params_t_sample_gsl);
-
-	gsl_vector_set(params_t_sample_gsl, 5, 
-		       gsl_vector_get(params_t_mean_gsl, 5) + gsl_ran_gaussian(r_ptr_local, sqrt(0.001)));
+      gsl_vector_set(params_t_sample_gsl, 5, 
+		     gsl_vector_get(params_t_mean_gsl, 5) +
+		     gsl_ran_gaussian(r_ptr_local,
+      				      sqrt(gsl_matrix_get(&sampling_covariance_view.matrix,
+      							  5,5))));
 
 	parameters params_t_sample = reals_to_parameters(params_t_sample_gsl);
 	gsl_vector_free(params_t_sample_gsl);
@@ -433,9 +407,8 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  double ll_for_sample = log_likelihood(y_t,
-						y_tm1,
-						theta_t[m],
+	  double ll_for_sample = log_likelihood(thetas[tt],
+						thetas[tt-1],
 						params_t[m]);
 	  log_new_weight =
 	    ll_for_sample -
@@ -461,12 +434,6 @@ int main(int argc, char *argv[]) {
 	      << " milliseconds" << std::endl;
     // SAMPLING PARAMTERS AND VOLATILITIES END
 
-    std::cout << "\nBefore normalizing, the weights are\n";
-    for (auto& log_weight : log_weights) {
-      std::cout << log_weight << " ";
-    }
-    std::cout << "\n" << std::endl;
-
     gsl_matrix_free(sampling_covariance);
     gsl_vector_free(scaled_mean);
 
@@ -480,12 +447,6 @@ int main(int argc, char *argv[]) {
 		   {
 		     return log_weight - log(sum_of_weights);
 		   });
-
-    std::cout << "\nAfter normalizing, the weights are\n";
-    for (auto& log_weight : log_weights) {
-      std::cout << log_weight << " ";
-    }
-    std::cout << "\n" << std::endl;
 
     theta_tm1 = theta_t;
     params_tm1 = params_t;
@@ -505,7 +466,20 @@ int main(int argc, char *argv[]) {
       mean_levels << quantile << ",";
     }
 
+
+    double theta_x_mean = 0;
+    for (unsigned j=0; j<params_t.size(); ++j) {
+      theta_x_mean = theta_x_mean +  params_t[j].theta_x * exp(log_weights[j]);
+    }
+    std::cout << std::endl;
+    
+    double theta_x_var = 0;
+    for (unsigned j=0; j<params_t.size(); ++j) {
+      theta_x_var += std::pow((params_t[j].theta_x - theta_x_mean),2) * exp(log_weights[j]);
+    }
+    mean_levels << theta_x_mean << "," << theta_x_var << ",";
     mean_levels << compute_ESS(log_weights);
+    
     std::cout << tt << " ";
     std::cout << "ess = " << compute_ESS(log_weights) << std::endl;
 

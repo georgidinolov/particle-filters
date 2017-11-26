@@ -15,8 +15,6 @@
 #include <stdio.h>
 #include <vector>
 
-
-
 int main(int argc, char *argv[]) {
   if (argc < 9 || argc > 9) {
     printf("You must provide input\n");
@@ -240,7 +238,7 @@ int main(int argc, char *argv[]) {
 				 sigma_y,
 				 power,
 				 std_dev_factor);
-
+    
   // BASES COPY FOR THREADS START
   int tid = 0;
   unsigned i = 0;
@@ -443,7 +441,7 @@ int main(int argc, char *argv[]) {
 				  y_tm1,
 				  params_t_sample,
 				  r_ptr);
-	theta_t[m] = thetas[tt];
+	// theta_t[m] = thetas[tt];
 
 	gsl_vector_free(params_t_sample_gsl);
 	gsl_vector_free(params_t_mean_gsl);
