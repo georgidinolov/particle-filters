@@ -4,7 +4,7 @@ library("latex2exp");
 ## file.name = "test-classical-beta-nparticles-80-theta-x";
 file.name.1 = "test-full-tmp-real-data-sigma_x-0.50-sigma_y-0.50-rho-0.0-dx-likelihood-0.003905-nparticles-10-ALL";
     ## "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-80-ALL"
-file.name.2 = "test-full-classical-sigma_x-0.50-sigma_y-0.50-rho-0.0-dx-likelihood-0.003905-nparticles-80-"
+file.name.2 = "test-full-tmp-beta-sigma_x-0.50-sigma_y-0.30-rho-0.7-dx-likelihood-0.003905-nparticles-10-ALL"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
@@ -28,8 +28,8 @@ dev.off()
 pdf("log-sigma-x.pdf", 6, 3);
 par(mar=c(2,4,1,1))
 plot(sim.data[-1, log.sigma.x], type = "l", lwd=2,
-     ylim = c(min(post.mean.1[, mean_log_sigma_x] - 2*sqrt(post.mean.1[, var_log_sigma_x])),
-              max(post.mean.1[, mean_log_sigma_x] + 2*sqrt(post.mean.1[, var_log_sigma_x]))),
+     ylim = c(min(post.mean.2[, mean_log_sigma_x] - 2*sqrt(post.mean.2[, var_log_sigma_x])),
+              max(post.mean.2[, mean_log_sigma_x] + 2*sqrt(post.mean.2[, var_log_sigma_x]))),
      xlab = "", ylab = TeX("$\\log(\\sigma)_x)"))
 lines(post.mean.1[, mean_log_sigma_x], col = "blue")
 lines(post.mean.1[, mean_log_sigma_x] - 2*sqrt(post.mean.1[, var_log_sigma_x]),

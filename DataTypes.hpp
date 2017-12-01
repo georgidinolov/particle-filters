@@ -30,7 +30,7 @@ struct NormalInverseWishartParameters {
     gsl_matrix_free(inverse_scale_mat);
   };
 
-  NormalInverseWishartParameters & operator=(const NormalInverseWishartParameters &rhs)
+  NormalInverseWishartParameters& operator=(const NormalInverseWishartParameters &rhs)
   {
     if (this==&rhs) {
       return *this;
@@ -49,6 +49,22 @@ struct NormalInverseWishartParameters {
       gsl_matrix_memcpy(inverse_scale_mat, rhs.inverse_scale_mat);
       return *this;
     }
+  }
+
+  NormalInverseWishartParameters(const NormalInverseWishartParameters& rhs)
+  {
+    dimension = rhs.dimension;
+    lambda = rhs.lambda;
+    deg_freedom = rhs.deg_freedom;
+
+    gsl_vector_free(mu_not);
+    gsl_matrix_free(inverse_scale_mat);
+
+    mu_not = gsl_vector_alloc(dimension);
+    gsl_vector_memcpy(mu_not, rhs.mu_not);
+    //
+    inverse_scale_mat = gsl_matrix_alloc(dimension,dimension);
+    gsl_matrix_memcpy(inverse_scale_mat, rhs.inverse_scale_mat);
   }
 };
 

@@ -177,6 +177,26 @@ int main(int argc, char *argv[]) {
     			    r_ptr);
   std::vector<parameters> params_t = params_tm1;
 
+  std::vector<parameters> prior_samples = sample_parameters_prior(priors_x,
+								  priors_y,
+								  priors_rho,
+								  prior_rho_leverage,
+								  10000,
+								  r_ptr);
+  gsl_vector * prior_mean = compute_parameters_mean(prior_samples);
+  gsl_matrix * prior_cov = compute_parameters_cov(prior_mean,
+						  prior_samples);
+  std::vector<NormalInverseWishartParameters> NIWkernels_tm1 (N_particles);
+  for (unsigned i=0; i<N_particles; ++i) {
+    gsl_vector_memcpy( NIWkernels_tm1[i].mu_not, prior_mean );
+    gsl_matrix_memcpy( NIWkernels_tm1[i].inverse_scale_mat, prior_cov );
+  }
+  gsl_vector_free(prior_mean);
+  gsl_matrix_free(prior_cov);
+
+  std::vector<NormalInverseWishartParameters> NIWkernels_t (N_particles);
+  NIWkernels_t = NIWkernels_tm1;
+
   std::vector<stoch_vol_datum> theta_tm1 = sample_theta_prior(params,
 							      N_particles,
 							      r_ptr);
@@ -259,62 +279,17 @@ int main(int argc, char *argv[]) {
     observable_datum y_t = ys[tt];
     observable_datum y_tm1 = ys[tt-1];
 
-    double scale_a = 0.99;
-
-    t1 = std::chrono::high_resolution_clock::now();
-    gsl_vector* scaled_mean = compute_parameters_mean(params_tm1);
-
-    gsl_matrix* scaled_cov = compute_parameters_cov(scaled_mean,
-    						    params_tm1);
-    
-
-    gsl_vector_scale(scaled_mean, (1.0-scale_a));
-    gsl_matrix_scale(scaled_cov,  std::pow((1.0-scale_a*scale_a), 2));
-    // OUTPUTTING MATRIX START
-    FILE * cov_matrix = fopen ("scaled_cov.dat", "wb");
-    gsl_matrix_fwrite(cov_matrix, scaled_cov);
-    fclose(cov_matrix);
-    // OUTPUTTING MATRIX END
-
-    // TO CHECK IF THE COV IS POS DEF START //
-    gsl_error_handler_t* old_handler = gsl_set_error_handler_off();
-    gsl_matrix* work = gsl_matrix_alloc(13, 13);
-    gsl_matrix_memcpy(work, scaled_cov);
-
-    int status = gsl_linalg_cholesky_decomp(work);
-    if (status == GSL_EDOM) {
-      gsl_vector_view diag_view = gsl_matrix_diagonal(scaled_cov);
-      gsl_vector* diag_cpy = gsl_vector_alloc(13);
-      gsl_vector_memcpy(diag_cpy, &diag_view.vector);
-
-      gsl_matrix_set_zero(scaled_cov);
-      gsl_vector_memcpy(&diag_view.vector, diag_cpy);
-      
-      // we need to check for non-zero diagonal entries too
-      for (unsigned i=0; i<13; ++i) {
-	if ( gsl_matrix_get(scaled_cov,i,i) < std::numeric_limits<double>::epsilon() ) {
-	  gsl_matrix_set(scaled_cov, i,i,
-			 std::pow(gsl_vector_get(scaled_mean,i), 2));
-	}
-      }
+    std::vector<parameters> params_t_mean (params_tm1.size());
+    for (unsigned ii = 0; ii<params_t_mean.size(); ++ii) {
+      const gsl_vector * current_param_mean = NIWkernels_tm1[ii].mu_not;
+      params_t_mean[ii] = reals_to_parameters(current_param_mean);
     }
-    gsl_set_error_handler(old_handler);
-    gsl_matrix_free(work);
-    // TO CHECK IF THE COV IS POS DEF END //
-
-    t2 = std::chrono::high_resolution_clock::now();
-    std::cout << "\nmean cov computation times = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " milliseconds\n";
 
     std::vector<stoch_vol_datum> theta_t_mean =
       theta_next_mean(theta_tm1,
   		      y_t,
   		      y_tm1,
-  		      params_tm1);
-
-    std::vector<parameters> params_t_mean = 
-      parameters_next_mean(params_tm1,
-      			   scaled_mean,
-      			   scale_a);
+  		      params_t_mean);
 
     std::vector<double> lls (N_particles);
 
@@ -367,35 +342,95 @@ int main(int argc, char *argv[]) {
       ks[i] = gsl_ran_discrete(r_ptr, particle_sampler);
     }
 
-    // SAMPLING PARAMTERS AND VOLATILITIES START 
+    // SAMPLING PARAMTERS AND VOLATILITIES START
     t1 = std::chrono::high_resolution_clock::now();
     unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, scaled_cov, params_t_mean) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
+#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, params_t_mean, NIWkernels_tm1, NIWkernels_t) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
     {
 #pragma omp for
       for (m=0; m<N_particles; ++m) {
 
 	unsigned k = ks[m];
 
-	gsl_vector * params_t_mean_gsl = parameters_to_reals(params_t_mean[k]);
 	MultivariateNormal mvnorm = MultivariateNormal();
-	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
+
+	NormalInverseWishartParameters NIWcurrent =
+	  NormalInverseWishartParameters();
+	NIWcurrent = NIWkernels_tm1[k];
+	// Sample Epsilon
+	double sample_epsilon_array [13*13];
+	gsl_matrix_view sample_epsilon_view =
+	  gsl_matrix_view_array(sample_epsilon_array,
+				13, 13);
+	gsl_matrix * sample_epsilon = &sample_epsilon_view.matrix;
+	mvnorm.rinvwishart(r_ptr,
+			   NIWcurrent.dimension,
+			   NIWcurrent.deg_freedom,
+			   NIWcurrent.inverse_scale_mat,
+			   sample_epsilon);
+	gsl_matrix_scale(sample_epsilon, 1.0/NIWcurrent.lambda);
+
+	double sample_mu_array [13];
+	gsl_vector_view sample_mu_view = gsl_vector_view_array(sample_mu_array,
+							       13);
+	gsl_vector * sample_mu = &sample_mu_view.vector;
 	mvnorm.rmvnorm(r_ptr,
-		       13,
-		       params_t_mean_gsl,
-		       scaled_cov,
+		       NIWcurrent.dimension,
+		       NIWcurrent.mu_not,
+		       sample_epsilon,
+		       sample_mu);
+
+	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
+	gsl_matrix_scale(sample_epsilon, NIWcurrent.lambda);
+
+	mvnorm.rmvnorm(r_ptr,
+		       NIWcurrent.dimension,
+		       sample_mu,
+		       sample_epsilon,
 		       params_t_sample_gsl);
+
 	parameters params_t_sample = reals_to_parameters(params_t_sample_gsl);
-	
+
 	params_t[m] = params_t_sample;
 	theta_t[m] = sample_theta(theta_tm1[k],
 				  y_t,
 				  y_tm1,
 				  params_t_sample,
 				  r_ptr);
+	// mu update
+	gsl_vector * mu_not_update = gsl_vector_alloc(13);
+	gsl_vector_memcpy(mu_not_update, NIWcurrent.mu_not);
+	gsl_vector_scale(mu_not_update, NIWcurrent.lambda);
+	gsl_vector_scale(params_t_sample_gsl, 1.0);
+	gsl_vector_add(mu_not_update, params_t_sample_gsl);
+	gsl_vector_scale(mu_not_update, 1.0/(NIWcurrent.lambda + 1.0));
+	gsl_vector_free(NIWcurrent.mu_not);
+	NIWcurrent.mu_not = mu_not_update;
+	// inverse_scale_matrix update
+	gsl_matrix* inverse_scale_matrix_update = gsl_matrix_alloc(13,13);
+	for (unsigned ii=0; ii<13; ++ii) {
+	  for (unsigned jj=0; jj<13; ++jj) {
+	    double entry =
+	      gsl_matrix_get(NIWcurrent.inverse_scale_mat, ii,jj) +
+	      (NIWcurrent.lambda*1.0)/
+			   (NIWcurrent.lambda + 1.0) *
+	      (gsl_vector_get(params_t_sample_gsl, ii) - gsl_vector_get(NIWcurrent.mu_not, ii))*
+	      (gsl_vector_get(params_t_sample_gsl, jj) - gsl_vector_get(NIWcurrent.mu_not, jj));
+
+	    gsl_matrix_set(inverse_scale_matrix_update,
+			   ii, jj, entry);
+
+
+	  }
+	}
+	gsl_matrix_free(NIWcurrent.inverse_scale_mat);
+	NIWcurrent.inverse_scale_mat = inverse_scale_matrix_update;
+	// lambda update
+	NIWcurrent.lambda = NIWcurrent.lambda + 1.0;
+	NIWcurrent.deg_freedom = NIWcurrent.deg_freedom + 1.0;
+	NIWkernels_t[m] = NIWcurrent;
 
 	gsl_vector_free(params_t_sample_gsl);
-	gsl_vector_free(params_t_mean_gsl);
 
 	double log_new_weight = 0.0;
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
@@ -431,9 +466,6 @@ int main(int argc, char *argv[]) {
 	      << " milliseconds" << std::endl;
     // SAMPLING PARAMTERS AND VOLATILITIES END
 
-    gsl_matrix_free(scaled_cov);
-    gsl_vector_free(scaled_mean);
-
     auto max_weight_iter_ptr = std::max_element(std::begin(log_weights),
 						std::end(log_weights));
     // normalizing weights
@@ -456,8 +488,9 @@ int main(int argc, char *argv[]) {
 
     theta_tm1 = theta_t;
     params_tm1 = params_t;
-    gsl_ran_discrete_free(particle_sampler);
+    NIWkernels_tm1 = NIWkernels_t;
 
+    gsl_ran_discrete_free(particle_sampler);
     std::vector<double> quantiles = compute_quantiles(theta_t,
 						      log_weights);
     std::vector<double> structural_quantiles = compute_quantiles(params_t,
