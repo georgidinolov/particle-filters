@@ -1172,6 +1172,23 @@ parameters reals_to_parameters(const gsl_vector* params)
   return out;
 }
 
+bool check_parameter_bounds(const parameters& params) {
+  if ( std::abs(params.theta_x) >= 1.0 ||
+       std::abs(params.theta_x) >= 1.0 ||
+       std::abs(params.theta_rho) >= 1.0 ||
+       std::abs(params.leverage_x_rho) >= 0.99 ||
+       std::abs(params.leverage_y_rho) >= 0.99 ) { 
+    return false ;
+  } else {
+    return true;
+  }
+}
+
+bool check_parameter_bounds(const gsl_vector * params) {
+  parameters params_nominal = reals_to_parameters(params);
+  return check_parameter_bounds(params_nominal);
+}
+
 void print_matrix(const gsl_matrix* mat, unsigned size_x, unsigned size_y) {
  for (unsigned i=0; i<size_x; ++i) {
     for (unsigned j=0; j<size_y; ++j) {

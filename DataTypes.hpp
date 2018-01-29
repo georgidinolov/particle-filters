@@ -229,4 +229,7 @@ void print_matrix(const gsl_matrix* cov,
 gsl_vector* parameters_to_reals(const parameters& params);
 parameters reals_to_parameters(const gsl_vector* params);
 
+bool check_parameter_bounds(const parameters& params);
+bool check_parameter_bounds(const gsl_vector * params);
+
 void print_matrix(const gsl_matrix* mat, unsigned size_x, unsigned size_y);

@@ -1,4 +1,18 @@
 cc_binary(
+	name = "2d-stochastic-vol-full-beta-classic",
+	srcs = ["2d-stochastic-vol-full-beta-classic.cpp"],
+	copts = ["-Isrc/multivariate-normal",
+	      	 "-Isrc/finite-element-igraph",
+		 "-Isrc/igraph-0.7.1/include",
+		 "-Isrc/SV-with-leverage/src",
+		 "-Isrc/nlopt/api",
+		 "-fopenmp",
+		 "-O3"],
+ 	deps = [":DataTypes"],
+	linkopts = ["-lm", "-lgsl", "-lgslcblas", "-fopenmp"],		 
+)
+
+cc_binary(
 	name = "2d-stochastic-vol-full-beta",
 	srcs = ["2d-stochastic-vol-full-beta.cpp"],
 	copts = ["-Isrc/multivariate-normal",

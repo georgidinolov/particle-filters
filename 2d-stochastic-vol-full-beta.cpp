@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(2);
+  omp_set_num_threads(40);
 
   static int counter = 0;
 #pragma omp threadprivate(counter)
@@ -246,10 +246,6 @@ int main(int argc, char *argv[]) {
 				 power,
 				 std_dev_factor);
 
-  std::ofstream saved_bases("saved_bases.csv");
-  saved_bases << basis_positive;
-  saved_bases.close();
-
   // BASES COPY FOR THREADS START
   int tid = 0;
   unsigned i = 0;
@@ -305,6 +301,11 @@ int main(int argc, char *argv[]) {
 						private_bases,
 						dx,
 						dx_likelihood);
+	if (std::isnan(likelihood) || 
+	    std::isinf(likelihood)) {
+	  likelihood = -1.0 * std::numeric_limits<double>::infinity();
+	}
+
 	lls[i] = likelihood;
 	printf("Thread %d with address %p produces likelihood %f where &params=%p\n",
 	       omp_get_thread_num(),
@@ -380,6 +381,19 @@ int main(int argc, char *argv[]) {
 		       sample_epsilon,
 		       sample_mu);
 
+	bool sample_within_bounds = check_parameter_bounds(sample_mu);
+	long unsigned counter = 0;
+	while (!sample_within_bounds && counter < 100) {
+	  mvnorm.rmvnorm(r_ptr,
+			 NIWcurrent.dimension,
+			 NIWcurrent.mu_not,
+			 sample_epsilon,
+			 sample_mu);
+	  counter++;
+	  sample_within_bounds = check_parameter_bounds(sample_mu);
+	}
+
+
 	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
 	gsl_matrix_scale(sample_epsilon, NIWcurrent.lambda);
 
@@ -388,6 +402,18 @@ int main(int argc, char *argv[]) {
 		       sample_mu,
 		       sample_epsilon,
 		       params_t_sample_gsl);
+
+	sample_within_bounds = check_parameter_bounds(params_t_sample_gsl);
+	counter = 0;
+	while (!sample_within_bounds && counter < 100) {
+	  mvnorm.rmvnorm(r_ptr,
+			 NIWcurrent.dimension,
+			 sample_mu,
+			 sample_epsilon,
+			 params_t_sample_gsl);
+	  counter++;
+	  sample_within_bounds = check_parameter_bounds(params_t_sample_gsl);
+	}
 
 	parameters params_t_sample = reals_to_parameters(params_t_sample_gsl);
 

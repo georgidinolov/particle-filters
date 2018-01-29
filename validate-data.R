@@ -4,7 +4,7 @@ library("latex2exp");
 ## file.name = "test-classical-beta-nparticles-80-theta-x";
 file.name.1 = "test-full-tmp-real-data-sigma_x-0.50-sigma_y-0.50-rho-0.0-dx-likelihood-0.003905-nparticles-10-ALL";
     ## "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-80-ALL"
-file.name.2 = "test-full-tmp-beta-sigma_x-0.50-sigma_y-0.30-rho-0.7-dx-likelihood-0.003905-nparticles-10-ALL"
+file.name.2 = "test-full-beta-sigma_x-0.40-sigma_y-0.40-rho-0.8-dx-likelihood-0.003905-nparticles-20-ALL"
 
 sim.data <- fread(input = "../../data.csv",
                   header = TRUE,
@@ -17,7 +17,6 @@ post.mean.1 <- fread(input = paste("../../", file.name.1, ".csv", sep=""),
 post.mean.2 <- fread(input = paste("../../", file.name.2, ".csv", sep=""),
                    header = TRUE,
                    sep = ",");
-
 
 pdf(paste(file.name, ".pdf", sep=""));
 par(mfrow=c(3,2))
