@@ -1,5 +1,4 @@
 #include <algorithm>
-#include "2DBrownianMotionPath.hpp"
 #include "DataTypes.hpp"
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
@@ -117,7 +116,7 @@ std::vector<parameters> sample_parameters_prior(const StochasticVolatilityPriors
     out[i].alpha_rho = prior_rho.get_alpha_prior().get_alpha_mean() +
       gsl_ran_gaussian(r, prior_rho.get_alpha_prior().get_alpha_std_dev());
     //
-    out[i].theta_x = 0.8 + 
+    out[i].theta_x = 0.8 +
       gsl_ran_gaussian(r, 0.2);
 		       //		       prior_x.get_theta_prior().get_theta_std_dev());
 
@@ -345,7 +344,7 @@ double log_likelihood(const stoch_vol_datum& theta_t,
   point = (theta_t.rho_tilde - params.alpha_rho) -
     params.theta_rho*(theta_tm1.rho_tilde - params.alpha_rho);
   double likelihood_rho = log(gsl_ran_gaussian_pdf(point, params.tau_rho));
-  
+
   double out = likelihood_x;
   return out;
 }
@@ -539,6 +538,82 @@ double log_likelihood_OCHL(const observable_datum& y_t,
     out = log(1e-32);
   }
   return out;
+}
+
+double log_likelihood_OCHL(const observable_datum& y_t,
+			   const observable_datum& y_tm1,
+			   const stoch_vol_datum& theta_t,
+			   const parameters& params,
+			   GaussianInterpolator& GP_prior)
+{
+  double x [2] = {y_t.x_t, y_t.y_t};
+  gsl_vector_view gsl_x = gsl_vector_view_array(x, 2);
+
+  double out = 0.0;
+
+  double sigma_x = exp(theta_t.log_sigma_x);
+  double sigma_y = exp(theta_t.log_sigma_y);
+  double rho = logit_inv(theta_t.rho_tilde)*2-1;
+
+  double Lx = y_t.b_x - y_t.a_x;
+  double Ly = y_t.b_y - y_t.a_y;
+  double log_likelihood = 0;
+
+  double sigma_xi = sigma_x / Lx;
+  double sigma_eta = sigma_y / Ly;
+
+  double xi_T = y_t.x_t / Lx;
+  double a_xi = y_t.a_x / Lx;
+  double b_xi = y_t.b_x / Lx;
+  double xi_0 = y_t.x_tm1 / Lx;
+
+  double eta_T = y_t.y_t / Ly;
+  double a_eta = y_t.a_y / Ly;
+  double b_eta = y_t.b_y / Ly;
+  double eta_0 = y_t.y_tm1 / Ly;
+
+  double t_tilde = 1.0*sigma_xi*sigma_xi;
+  double sigma_y_tilde = sigma_eta/sigma_xi;
+
+  if (sigma_xi < sigma_eta) {
+    t_tilde = 1.0*sigma_eta*sigma_eta;
+    sigma_y_tilde = sigma_xi/sigma_eta;
+  }
+
+  xi_T = xi_T - a_xi;
+  xi_0 = xi_0 - a_xi;
+
+  eta_T = eta_T - a_eta;
+  eta_0 = eta_0 - a_eta;
+
+  if (t_tilde <= std::numeric_limits<double>::epsilon() |
+      sigma_y_tilde <= std::numeric_limits<double>::epsilon()) {
+    printf("t_tilde too small\n");
+    log_likelihood = -10;
+  } else {
+    likelihood_point lp = likelihood_point(xi_0,
+					   eta_0,
+					   //
+					   xi_T,
+					   eta_T,
+					   //
+					   sigma_y_tilde,
+					   t_tilde,
+					   rho,
+					   0.0);
+    log_likelihood = GP_prior(lp);
+    lp.likelihood = log_likelihood;
+    lp.print_point();
+
+    printf("Uncertainty in interpolation = %f\n",
+	   sqrt(GP_prior.prediction_variance(lp)));
+
+  
+  
+    log_likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
+  }
+  
+  return log_likelihood;
 }
 
 stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
@@ -747,7 +822,7 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
   std::ifstream data_file(file);
   std::string value;
   std::vector<observable_datum> out (0);
-  
+
   if (data_file.is_open()) {
     // go through the header
     for (unsigned i=0; i<14; ++i) {
@@ -762,7 +837,7 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
     while (std::getline(data_file, value, ',')) {
 
       observable_datum current_datum;
-      
+
       // second value is FTSE open
       std::getline(data_file, value, ',');
       double ftse_open = log(std::stod(value));
@@ -817,7 +892,7 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
   for (unsigned i=0; i<out.size(); ++i) {
     std::cout << out[i] << std::endl;
   }
-  
+
   return out;
 }
 
@@ -1010,7 +1085,7 @@ gsl_vector* compute_parameters_mean(const std::vector<parameters>& params_t)
 			 //
 			 1.0/N* logit( (params_t[i].leverage_x_rho+1.0)/2.0 ),
 			 1.0/N* logit( (params_t[i].leverage_y_rho+1.0)/2.0 )};
-    
+
     gsl_vector_view gsl_summand = gsl_vector_view_array(summand, 13);
     gsl_vector_add(out, &gsl_summand.vector);
   }
@@ -1022,7 +1097,7 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 				   const std::vector<parameters>& params_t)
 {
   unsigned N = params_t.size();
-  
+
   gsl_matrix * covariance = gsl_matrix_alloc(13,13);
   gsl_matrix_set_zero(covariance);
 
@@ -1044,13 +1119,13 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 	//
 	logit( (params_t[i].leverage_x_rho+1.0)/2.0 ) - gsl_vector_get(mean, 11),
 	logit( (params_t[i].leverage_y_rho+1.0)/2.0 ) - gsl_vector_get(mean, 12) };
-    
+
     for (unsigned j=0; j<13; ++j) {
       for (unsigned k=0; k<13; ++k) {
-	
+
 	double current_entry = gsl_matrix_get(covariance,j,k) +
 	  summand[j]*summand[k] * (1.0/N);
-	  
+
 	gsl_matrix_set(covariance,
 		       j,k,
 		       current_entry);
@@ -1062,16 +1137,16 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
   gsl_error_handler_t* old_handler = gsl_set_error_handler_off();
   gsl_matrix* work = gsl_matrix_alloc(13, 13);
   gsl_matrix_memcpy(work, covariance);
-  
+
   int status = gsl_linalg_cholesky_decomp(work);
   if (status == GSL_EDOM) {
     gsl_vector_view diag_view = gsl_matrix_diagonal(covariance);
     gsl_vector* diag_cpy = gsl_vector_alloc(13);
     gsl_vector_memcpy(diag_cpy, &diag_view.vector);
-    
+
     gsl_matrix_set_zero(covariance);
     gsl_vector_memcpy(&diag_view.vector, diag_cpy);
-      
+
     // we need to check for non-zero diagonal entries too
     for (unsigned i=0; i<13; ++i) {
       if ( gsl_matrix_get(covariance, i,i) < std::numeric_limits<double>::epsilon() ||
@@ -1079,13 +1154,13 @@ gsl_matrix* compute_parameters_cov(const gsl_vector* mean,
 
 	double candidates[] = {std::pow(gsl_vector_get(mean,i), 2),
 			       std::numeric_limits<double>::epsilon() * 10};
-	
+
 	gsl_matrix_set(covariance, i,i,
 		       *std::max_element(candidates, candidates+2));
       }
     }
   }
-  
+
   gsl_set_error_handler(old_handler);
   gsl_matrix_free(work);
   // TO CHECK IF THE COV IS POS DEF END //
