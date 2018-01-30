@@ -280,15 +280,15 @@ int main(int argc, char *argv[]) {
     {
 #pragma omp for
       for (i=0; i<N_particles; ++i) {
-	double likelihood = log_likelihood_OCHL(y_t,
-						y_tm1,
-						theta_t_mean[i],
-						params_t_mean[i],
-						GP_prior);
-	lls[i] = likelihood;
+	likelihood_point lp = log_likelihood_OCHL(y_t,
+						  y_tm1,
+						  theta_t_mean[i],
+						  params_t_mean[i],
+						  GP_prior);
+	lls[i] = lp.likelihood;
 	printf("Thread %d with address ' ' produces likelihood %f where &params=%p\n",
 	       omp_get_thread_num(),
-	       likelihood,
+	       lp.likelihood,
 	       &params);
       }
     }
@@ -320,11 +320,12 @@ int main(int argc, char *argv[]) {
     for (unsigned i=0; i<N_particles; ++i) {
       ks[i] = gsl_ran_discrete(r_ptr, particle_sampler);
     }
-
+    std::vector<likelihood_point> lps (N_particles);
+    
     // SAMPLING PARAMTERS AND VOLATILITIES START
     t1 = std::chrono::high_resolution_clock::now();
     unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, params_t_mean, NIWkernels_tm1, NIWkernels_t, GP_prior) firstprivate(y_t, y_tm1, params)
+#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, params_t_mean, NIWkernels_tm1, NIWkernels_t, GP_prior, lps) firstprivate(y_t, y_tm1, params)
     {
 #pragma omp for
       for (m=0; m<N_particles; ++m) {
@@ -359,6 +360,18 @@ int main(int argc, char *argv[]) {
 		       sample_epsilon,
 		       sample_mu);
 
+	bool sample_within_bounds = check_parameter_bounds(sample_mu);
+	long unsigned counter = 0;
+	while (!sample_within_bounds && counter < 100) {
+	  mvnorm.rmvnorm(r_ptr,
+			 NIWcurrent.dimension,
+			 NIWcurrent.mu_not,
+			 sample_epsilon,
+			 sample_mu);
+	  counter++;
+	  sample_within_bounds = check_parameter_bounds(sample_mu);
+	}
+
 	gsl_vector * params_t_sample_gsl = gsl_vector_alloc(13);
 	gsl_matrix_scale(sample_epsilon, NIWcurrent.lambda);
 
@@ -367,6 +380,18 @@ int main(int argc, char *argv[]) {
 		       sample_mu,
 		       sample_epsilon,
 		       params_t_sample_gsl);
+
+	sample_within_bounds = check_parameter_bounds(params_t_sample_gsl);
+	counter = 0;
+	while (!sample_within_bounds && counter < 100) {
+	  mvnorm.rmvnorm(r_ptr,
+			 NIWcurrent.dimension,
+			 sample_mu,
+			 sample_epsilon,
+			 params_t_sample_gsl);
+	  counter++;
+	  sample_within_bounds = check_parameter_bounds(params_t_sample_gsl);
+	}
 
 	parameters params_t_sample = reals_to_parameters(params_t_sample_gsl);
 
@@ -416,14 +441,16 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  double ll_for_sample = log_likelihood_OCHL(y_t,
-						     y_tm1,
-						     theta_t[m],
-						     params_t[m],
-						     GP_prior);
+	  likelihood_point lp_for_sample = log_likelihood_OCHL(y_t,
+							       y_tm1,
+							       theta_t[m],
+							       params_t[m],
+							       GP_prior);
 	  log_new_weight =
-	    ll_for_sample -
+	    lp_for_sample.likelihood -
 	    lls[k];
+
+	  lps[m] = lp_for_sample;
 
 	  if (std::isinf(log_new_weight) || std::isnan(log_new_weight)) {
 	    log_new_weight = -1.0*std::numeric_limits<double>::infinity();
@@ -438,11 +465,20 @@ int main(int argc, char *argv[]) {
 	       log_new_weight);
 	log_weights[m] = log_new_weight;
       }
+
+      std::ofstream lps_for_out;
+      lps_for_out.open("likelihood_points_from_filter.csv");
+      for (m=0; m<N_particles; ++m) {
+	lps_for_out << lps[m];
+      }
+      lps_for_out.close();
+
     }
     t2 = std::chrono::high_resolution_clock::now();
     std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
 	      << " milliseconds" << std::endl;
     // SAMPLING PARAMTERS AND VOLATILITIES END
+    
 
     auto max_weight_iter_ptr = std::max_element(std::begin(log_weights),
 						std::end(log_weights));

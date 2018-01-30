@@ -540,11 +540,11 @@ double log_likelihood_OCHL(const observable_datum& y_t,
   return out;
 }
 
-double log_likelihood_OCHL(const observable_datum& y_t,
-			   const observable_datum& y_tm1,
-			   const stoch_vol_datum& theta_t,
-			   const parameters& params,
-			   GaussianInterpolator& GP_prior)
+likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
+				     const observable_datum& y_tm1,
+				     const stoch_vol_datum& theta_t,
+				     const parameters& params,
+				     GaussianInterpolator& GP_prior)
 {
   double x [2] = {y_t.x_t, y_t.y_t};
   gsl_vector_view gsl_x = gsl_vector_view_array(x, 2);
@@ -585,35 +585,27 @@ double log_likelihood_OCHL(const observable_datum& y_t,
 
   eta_T = eta_T - a_eta;
   eta_0 = eta_0 - a_eta;
-
-  if (t_tilde <= std::numeric_limits<double>::epsilon() |
-      sigma_y_tilde <= std::numeric_limits<double>::epsilon()) {
-    printf("t_tilde too small\n");
-    log_likelihood = -10;
-  } else {
-    likelihood_point lp = likelihood_point(xi_0,
-					   eta_0,
-					   //
-					   xi_T,
-					   eta_T,
-					   //
-					   sigma_y_tilde,
-					   t_tilde,
-					   rho,
-					   0.0);
-    log_likelihood = GP_prior(lp);
-    lp.likelihood = log_likelihood;
-    lp.print_point();
-
-    printf("Uncertainty in interpolation = %f\n",
-	   sqrt(GP_prior.prediction_variance(lp)));
-
   
+  likelihood_point lp = likelihood_point(xi_0,
+					 eta_0,
+					 //
+					 xi_T,
+					 eta_T,
+					 //
+					 sigma_y_tilde,
+					 t_tilde,
+					 rho,
+					 0.0);
+  log_likelihood = GP_prior(lp);
+  lp.likelihood = log_likelihood;
+  lp.print_point();
   
-    log_likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
-  }
+  printf("Uncertainty in interpolation = %f\n",
+	 sqrt(GP_prior.prediction_variance(lp)));
   
-  return log_likelihood;
+  lp.likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
+  
+  return lp;
 }
 
 stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,

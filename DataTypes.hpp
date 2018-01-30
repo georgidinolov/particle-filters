@@ -190,11 +190,11 @@ double log_likelihood_OCHL(const observable_datum& y_t,
 			   double dx,
 			   double dx_likelihood);
 
-double log_likelihood_OCHL(const observable_datum& y_t,
-			   const observable_datum& y_tm1,
-			   const stoch_vol_datum& theta_t,
-			   const parameters& params,
-			   GaussianInterpolator& GP_prior);
+likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
+				     const observable_datum& y_tm1,
+				     const stoch_vol_datum& theta_t,
+				     const parameters& params,
+				     GaussianInterpolator& GP_prior);
 
 stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
 			     const observable_datum& y_current,
