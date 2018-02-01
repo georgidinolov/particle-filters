@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(1);
+  omp_set_num_threads(30);
 
   double sigma_2=0.00291518;
   double phi=-1.38676;
@@ -320,7 +320,7 @@ int main(int argc, char *argv[]) {
     for (unsigned i=0; i<N_particles; ++i) {
       ks[i] = gsl_ran_discrete(r_ptr, particle_sampler);
     }
-    std::vector<likelihood_point> lps (N_particles);
+    std::vector<std::vector<double>> lps (N_particles);
     
     // SAMPLING PARAMTERS AND VOLATILITIES START
     t1 = std::chrono::high_resolution_clock::now();
@@ -441,13 +441,13 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  likelihood_point lp_for_sample = log_likelihood_OCHL(y_t,
-							       y_tm1,
-							       theta_t[m],
-							       params_t[m],
-							       GP_prior);
+	  std::vector<double> lp_for_sample = log_likelihood_OCHL_2(y_t,
+								    y_tm1,
+								    theta_t[m],
+								    params_t[m],
+								    GP_prior);
 	  log_new_weight =
-	    lp_for_sample.likelihood -
+	    lp_for_sample[9] -
 	    lls[k];
 
 	  lps[m] = lp_for_sample;
@@ -469,7 +469,21 @@ int main(int argc, char *argv[]) {
       std::ofstream lps_for_out;
       lps_for_out.open("likelihood_points_from_filter.csv");
       for (m=0; m<N_particles; ++m) {
-	lps_for_out << lps[m];
+	std::vector<double> current_out = lps[m];
+	lps_for_out << "x_t=" << current_out[0] << ";\n";
+	lps_for_out << "y_t=" << current_out[1] << ";\n";
+	//
+	lps_for_out << "x_0=" << current_out[2] << ";\n";
+	lps_for_out << "y_0=" << current_out[3] << ";\n";
+	//
+	lps_for_out << "Lx=" << current_out[4] << ";\n";
+	lps_for_out << "Ly=" << current_out[5] << ";\n";
+	//
+	lps_for_out << "sigma.x=" << current_out[6] << ";\n";
+	lps_for_out << "sigma.y=" << current_out[7] << ";\n";
+	lps_for_out << "rho=" << current_out[8] << ";\n";
+	//
+	lps_for_out << "log.like=" << current_out[9] << ";\n";
       }
       lps_for_out.close();
 

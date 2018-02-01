@@ -608,6 +608,87 @@ likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
   return lp;
 }
 
+std::vector<double> log_likelihood_OCHL_2(const observable_datum& y_t,
+					const observable_datum& y_tm1,
+					const stoch_vol_datum& theta_t,
+					const parameters& params,
+					GaussianInterpolator& GP_prior)
+{
+  double x [2] = {y_t.x_t, y_t.y_t};
+  gsl_vector_view gsl_x = gsl_vector_view_array(x, 2);
+
+  double sigma_x = exp(theta_t.log_sigma_x);
+  double sigma_y = exp(theta_t.log_sigma_y);
+  double rho = logit_inv(theta_t.rho_tilde)*2-1;
+
+  double Lx = y_t.b_x - y_t.a_x;
+  double Ly = y_t.b_y - y_t.a_y;
+  double log_likelihood = 0;
+
+  double sigma_xi = sigma_x / Lx;
+  double sigma_eta = sigma_y / Ly;
+
+  double xi_T = y_t.x_t / Lx;
+  double a_xi = y_t.a_x / Lx;
+  double b_xi = y_t.b_x / Lx;
+  double xi_0 = y_t.x_tm1 / Lx;
+
+  double eta_T = y_t.y_t / Ly;
+  double a_eta = y_t.a_y / Ly;
+  double b_eta = y_t.b_y / Ly;
+  double eta_0 = y_t.y_tm1 / Ly;
+
+  double t_tilde = 1.0*sigma_xi*sigma_xi;
+  double sigma_y_tilde = sigma_eta/sigma_xi;
+
+  if (sigma_xi < sigma_eta) {
+    t_tilde = 1.0*sigma_eta*sigma_eta;
+    sigma_y_tilde = sigma_xi/sigma_eta;
+  }
+
+  xi_T = xi_T - a_xi;
+  xi_0 = xi_0 - a_xi;
+
+  eta_T = eta_T - a_eta;
+  eta_0 = eta_0 - a_eta;
+  
+  likelihood_point lp = likelihood_point(xi_0,
+					 eta_0,
+					 //
+					 xi_T,
+					 eta_T,
+					 //
+					 sigma_y_tilde,
+					 t_tilde,
+					 rho,
+					 0.0);
+  log_likelihood = GP_prior(lp);
+  lp.likelihood = log_likelihood;
+  lp.print_point();
+  
+  printf("Uncertainty in interpolation = %f\n",
+	 sqrt(GP_prior.prediction_variance(lp)));
+  
+  lp.likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
+
+  std::vector<double> out = std::vector<double> (10);
+  out[0] = y_t.x_t - y_t.a_x;
+  out[1] = y_t.y_t - y_t.a_y;
+  //
+  out[2] = y_t.x_tm1 - y_t.a_x;
+  out[3] = y_t.y_tm1 - y_t.a_y;
+  //
+  out[4] = Lx;
+  out[5] = Ly;
+  //
+  out[6] = sigma_x;
+  out[7] = sigma_y;
+  out[8] = rho;
+  out[9] = lp.likelihood;
+
+  return out;
+}
+
 stoch_vol_datum sample_theta(const stoch_vol_datum& theta_current,
 			     const observable_datum& y_current,
 			     const observable_datum& y_current_m1,
