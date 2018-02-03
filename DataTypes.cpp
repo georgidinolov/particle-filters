@@ -597,12 +597,10 @@ likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
 					 rho,
 					 0.0);
   log_likelihood = GP_prior(lp);
-  lp.likelihood = log_likelihood;
-  lp.print_point();
-  
-  printf("Uncertainty in interpolation = %f\n",
-	 sqrt(GP_prior.prediction_variance(lp)));
-  
+  if (std::isnan(log_likelihood)) {
+    log_likelihood = log(0.0);
+  }
+        
   lp.likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
   
   return lp;
@@ -681,8 +679,8 @@ std::vector<double> log_likelihood_OCHL_2(const observable_datum& y_t,
   out[4] = Lx;
   out[5] = Ly;
   //
-  out[6] = sigma_x;
-  out[7] = sigma_y;
+  out[6] = theta_t.log_sigma_x;
+  out[7] = theta_t.log_sigma_y;
   out[8] = rho;
   out[9] = lp.likelihood;
 

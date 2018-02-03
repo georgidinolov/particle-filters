@@ -3,6 +3,7 @@ library("data.table");
 library("latex2exp");
 ## file.name = "test-classical-beta-nparticles-80-theta-x";
 file.name.1 = "test-full-beta-sigma_x-0.40-sigma_y-0.10-rho-0.8-dx-likelihood-0.003905-nparticles-40-ALL";
+## file.name.1 = "hello-world";
     ## "test-full-tmp-sigma_x-0.30-sigma_y-0.10-rho-0.7-dx-likelihood-0.003905-nparticles-80-ALL"
 
 file.name.2 = "test-full-beta-sigma_x-0.30-sigma_y-0.10-rho-0.8-dx-likelihood-0.003905-nparticles-80-ALL";
@@ -87,3 +88,4 @@ lines(post.mean.2[, mean_rho_tilde] - 2*sqrt(post.mean.2[, var_rho_tilde]),
 lines(post.mean.2[, mean_rho_tilde] + 2*sqrt(post.mean.2[, var_rho_tilde]),
       col="red", lty = "dashed")
 dev.off();
+

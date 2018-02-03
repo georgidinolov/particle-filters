@@ -74,6 +74,9 @@ int main(int argc, char *argv[]) {
   static int counter = 0;
 #pragma omp threadprivate(counter)
 
+  static BivariateGaussianKernelBasis* private_bases;
+#pragma omp threadprivate(private_bases)
+
   long unsigned T = 1 * number_data_points * 6.5 * 3600 * 1000; // number days in ms
   long unsigned Delta = 1 * 6.5*3600*1000; // one day in ms
 
@@ -256,6 +259,39 @@ int main(int argc, char *argv[]) {
 	      << "ess\n";
   mean_levels.close();
 
+//   // BASES COPY FOR THREADS START
+//   double dx = 1.0/500.0;
+//   double power = 1.0;
+//   double std_dev_factor = 1.0;
+
+//   double sigma_x = 0.5;
+//   double sigma_y = 0.2;
+//   double rho_basis = 0.8;
+
+//   std::cout << "creating basis" << std::endl;
+//   BivariateGaussianKernelBasis basis_positive =
+//     BivariateGaussianKernelBasis(dx,
+// 				 rho_basis,
+// 				 sigma_x,
+// 				 sigma_y,
+// 				 power,
+// 				 std_dev_factor);
+
+//   int tid = 0;
+//   unsigned i = 0;
+
+//   std::cout << "copying bases vectors for threads as private variables" << std::endl;
+// #pragma omp parallel default(none) private(tid, i) shared(basis_positive)
+//   {
+//     tid = omp_get_thread_num();
+
+//     private_bases = new BivariateGaussianKernelBasis();
+//     (*private_bases) = basis_positive;
+
+//     printf("Thread %d: counter %d\n", tid, counter);
+//   }
+//   // BASES COPY FOR THREADS END
+  
   for (unsigned tt=1; tt<N; ++tt) {
     observable_datum y_t = ys[tt];
     observable_datum y_tm1 = ys[tt-1];
@@ -286,10 +322,12 @@ int main(int argc, char *argv[]) {
 						  params_t_mean[i],
 						  GP_prior);
 	lls[i] = lp.likelihood;
-	printf("Thread %d with address ' ' produces likelihood %f where &params=%p\n",
+	double variance = GP_prior.prediction_variance(lp);
+	printf("Thread %d with address ' ' produces likelihood %f where &params=%p with uncertainty %f\n",
 	       omp_get_thread_num(),
 	       lp.likelihood,
-	       &params);
+	       &params,
+	       sqrt(variance));
       }
     }
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -320,7 +358,7 @@ int main(int argc, char *argv[]) {
     for (unsigned i=0; i<N_particles; ++i) {
       ks[i] = gsl_ran_discrete(r_ptr, particle_sampler);
     }
-    std::vector<std::vector<double>> lps (N_particles);
+    std::vector<likelihood_point> lps (N_particles);
     
     // SAMPLING PARAMTERS AND VOLATILITIES START
     t1 = std::chrono::high_resolution_clock::now();
@@ -441,13 +479,13 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  std::vector<double> lp_for_sample = log_likelihood_OCHL_2(y_t,
-								    y_tm1,
-								    theta_t[m],
-								    params_t[m],
-								    GP_prior);
+	  likelihood_point lp_for_sample = log_likelihood_OCHL(y_t,
+							       y_tm1,
+							       theta_t[m],
+							       params_t[m],
+							       GP_prior);
 	  log_new_weight =
-	    lp_for_sample[9] -
+	    lp_for_sample.likelihood -
 	    lls[k];
 
 	  lps[m] = lp_for_sample;
@@ -469,21 +507,7 @@ int main(int argc, char *argv[]) {
       std::ofstream lps_for_out;
       lps_for_out.open("likelihood_points_from_filter.csv");
       for (m=0; m<N_particles; ++m) {
-	std::vector<double> current_out = lps[m];
-	lps_for_out << "x_t=" << current_out[0] << ";\n";
-	lps_for_out << "y_t=" << current_out[1] << ";\n";
-	//
-	lps_for_out << "x_0=" << current_out[2] << ";\n";
-	lps_for_out << "y_0=" << current_out[3] << ";\n";
-	//
-	lps_for_out << "Lx=" << current_out[4] << ";\n";
-	lps_for_out << "Ly=" << current_out[5] << ";\n";
-	//
-	lps_for_out << "sigma.x=" << current_out[6] << ";\n";
-	lps_for_out << "sigma.y=" << current_out[7] << ";\n";
-	lps_for_out << "rho=" << current_out[8] << ";\n";
-	//
-	lps_for_out << "log.like=" << current_out[9] << ";\n";
+	lps_for_out << lps[m];
       }
       lps_for_out.close();
 
