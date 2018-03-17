@@ -1,11 +1,11 @@
-#include "BivariateSolver.hpp"
+#include "src/finite-element-igraph/BivariateSolver.hpp"
 #include <cmath>
 #include "GaussianInterpolator.hpp"
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_vector.h>
-#include "PriorTypes.hpp"
+#include "src/SV-with-leverage/src/PriorTypes.hpp"
 #include <vector>
 
 struct NormalInverseWishartParameters {
@@ -230,6 +230,12 @@ void generate_data(std::vector<observable_datum>& ys,
 		   long unsigned seed,
 		   unsigned buffer,
 		   bool SWITCH_XY);
+
+void generate_data(std::vector<BrownianMotion>& BMs,
+		   const parameters& params,
+		   unsigned order,
+		   long unsigned seed,
+		   unsigned buffer);
 
 gsl_vector*  compute_parameters_mean(const std::vector<parameters>& params_t);
 gsl_matrix*  compute_parameters_cov(const gsl_vector* mean,

@@ -549,8 +549,6 @@ likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
   double x [2] = {y_t.x_t, y_t.y_t};
   gsl_vector_view gsl_x = gsl_vector_view_array(x, 2);
 
-  double out = 0.0;
-
   double sigma_x = exp(theta_t.log_sigma_x);
   double sigma_y = exp(theta_t.log_sigma_y);
   double rho = logit_inv(theta_t.rho_tilde)*2-1;
@@ -559,49 +557,47 @@ likelihood_point log_likelihood_OCHL(const observable_datum& y_t,
   double Ly = y_t.b_y - y_t.a_y;
   double log_likelihood = 0;
 
-  double sigma_xi = sigma_x / Lx;
-  double sigma_eta = sigma_y / Ly;
+  double x_T = y_t.x_t - y_t.a_x;
+  double x_0 = y_t.x_tm1 - y_t.a_x;
 
-  double xi_T = y_t.x_t / Lx;
-  double a_xi = y_t.a_x / Lx;
-  double b_xi = y_t.b_x / Lx;
-  double xi_0 = y_t.x_tm1 / Lx;
+  double y_T = y_t.y_t - y_t.a_y;
+  double y_0 = y_t.y_tm1 - y_t.a_y;
+  double t = 1.0;
+  // STEP 1
+  double tau_x = sigma_x / Lx;
+  double tau_y = sigma_y / Ly;
+  
+  double x_t_tilde = x_T/Lx;
+  double y_t_tilde = y_T/Lx;
+  double x_0_tilde = x_0/Lx;
+  double y_0_tilde = y_0/Ly;
+  double sigma_y_tilde = tau_y/tau_x;
+  double t_tilde = t * std::pow(tau_x, 2);
 
-  double eta_T = y_t.y_t / Ly;
-  double a_eta = y_t.a_y / Ly;
-  double b_eta = y_t.b_y / Ly;
-  double eta_0 = y_t.y_tm1 / Ly;
-
-  double t_tilde = 1.0*sigma_xi*sigma_xi;
-  double sigma_y_tilde = sigma_eta/sigma_xi;
-
-  if (sigma_xi < sigma_eta) {
-    t_tilde = 1.0*sigma_eta*sigma_eta;
-    sigma_y_tilde = sigma_xi/sigma_eta;
+  if (tau_x < tau_y) {
+    x_t_tilde = y_T/Ly;
+    y_t_tilde = x_T/Lx;
+    //
+    x_0_tilde = y_0/Ly;
+    y_0_tilde = x_0/Lx;
+    //
+    sigma_y_tilde = tau_x/tau_y;
+    //
+    t_tilde = std::pow(tau_y, 2);
   }
 
-  xi_T = xi_T - a_xi;
-  xi_0 = xi_0 - a_xi;
-
-  eta_T = eta_T - a_eta;
-  eta_0 = eta_0 - a_eta;
-  
-  likelihood_point lp = likelihood_point(xi_0,
-					 eta_0,
+  likelihood_point lp = likelihood_point(x_0_tilde,
+					 y_0_tilde,
 					 //
-					 xi_T,
-					 eta_T,
+					 x_t_tilde,
+					 y_t_tilde,
 					 //
 					 sigma_y_tilde,
 					 t_tilde,
 					 rho,
 					 0.0);
   log_likelihood = GP_prior(lp);
-  if (std::isnan(log_likelihood)) {
-    log_likelihood = log(0.0);
-  }
-        
-  lp.likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
+  lp.log_likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
   
   return lp;
 }
@@ -661,13 +657,13 @@ std::vector<double> log_likelihood_OCHL_2(const observable_datum& y_t,
 					 rho,
 					 0.0);
   log_likelihood = GP_prior(lp);
-  lp.likelihood = log_likelihood;
+  lp.log_likelihood = log_likelihood;
   lp.print_point();
   
   printf("Uncertainty in interpolation = %f\n",
 	 sqrt(GP_prior.prediction_variance(lp)));
   
-  lp.likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
+  lp.log_likelihood = log_likelihood - (3*log(Lx) + 3*log(Ly));
 
   std::vector<double> out = std::vector<double> (10);
   out[0] = y_t.x_t - y_t.a_x;
@@ -682,7 +678,7 @@ std::vector<double> log_likelihood_OCHL_2(const observable_datum& y_t,
   out[6] = theta_t.log_sigma_x;
   out[7] = theta_t.log_sigma_y;
   out[8] = rho;
-  out[9] = lp.likelihood;
+  out[9] = lp.log_likelihood;
 
   return out;
 }
@@ -967,7 +963,7 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
   return out;
 }
 
- void generate_data(std::vector<observable_datum>& ys,
+void generate_data(std::vector<observable_datum>& ys,
 		    std::vector<stoch_vol_datum>& thetas,
 		    const parameters& params,
 		    unsigned order,
@@ -1086,8 +1082,6 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
     log_sigma_y_t = log_sigma_y_tp1;
     rho_tilde_t = rho_tilde_tp1;
     rho_t = rho_tp1;
-
-
   }
 
   gsl_rng_free(r_ptr);
@@ -1130,6 +1124,108 @@ std::vector<observable_datum> read_data_from_csv(std::string file)
   }
 
    output.close();
+ }
+
+
+void generate_data(std::vector<BrownianMotion>& BMs,
+		    const parameters& params,
+		    unsigned order,
+		    long unsigned seed,
+		    unsigned buffer)
+ {
+  unsigned N = BMs.size() + buffer;
+  std::vector<observable_datum> ys_long (N);
+  std::vector<stoch_vol_datum> thetas_long (N);
+
+  double rho_t = 0;
+  double rho_tilde_t = logit((rho_t+1)/2);
+
+  double x_t = log(100);
+  double y_t = log(100);
+
+  double log_sigma_x_t = params.alpha_x;
+  double log_sigma_y_t = params.alpha_y;
+
+  std::cout << "N+1 = " << N+1 << std::endl;
+  std::cout << "log_sigma_x_t = " << log_sigma_x_t << std::endl;
+
+  // setnames(innovations, seq(1,5), c("epsilon_x", "epsilon_y",
+  //                                   "eta_x", "eta_y", "eta_rho"))
+
+
+  //  double * output = new double [(N+1)*9];
+    // output = data_table(x = as_numeric(rep(NA,N)),
+    //                      y = as_numeric(rep(NA,N)),
+    //                      log_sigma_x = as_numeric(rep(NA,N)),
+    //                      log_sigma_y = as_numeric(rep(NA,N)),
+    //                      rho_tilde = as_numeric(rep(NA,N)))
+
+
+
+
+  ys_long[0].x_tm1 = x_t;
+  ys_long[0].y_tm1 = y_t;
+
+  thetas_long[0].log_sigma_x = log_sigma_x_t;
+  thetas_long[0].log_sigma_y = log_sigma_y_t;
+  thetas_long[0].rho_tilde = rho_tilde_t;
+
+  // output[1, c("x",
+  //             "y",
+  //             "log_sigma_x",
+  //             "log_sigma_y",
+  //             "rho_tilde") := as_list(c(x_t,
+  //                                       y_t,
+  //                                       log_sigma_x_t,
+  //                                       log_sigma_y_t,
+  //                                       rho_tilde_t))]
+
+  const gsl_rng_type * Type;
+  gsl_rng_env_setup();
+  Type = gsl_rng_default;
+  gsl_rng * r_ptr = gsl_rng_alloc(Type);
+  gsl_rng_set(r_ptr, seed);
+
+  for (unsigned i=0; i<N; ++i) {
+    double log_sigma_x_tp1 = params.alpha_x +
+      params.theta_x*(log_sigma_x_t - params.alpha_x) +
+      gsl_ran_gaussian(r_ptr, params.tau_x);
+
+    double log_sigma_y_tp1 = params.alpha_y +
+      params.theta_y*(log_sigma_y_t - params.alpha_y) +
+      gsl_ran_gaussian(r_ptr, params.tau_y);
+
+    double rho_tp1 = 0.9*sin(2.0*M_PI/256.0*i);
+    if (i < 50) {
+      rho_tp1 = 0.7;
+    } else {
+      rho_tp1 = -0.7;
+    }
+    double rho_tilde_tp1 = logit( (rho_tp1 + 1.0)/2.0 );
+
+    // rho_tilde_tp1 = rho_tilde_t + tau_rho*innovations[i-1,eta_rho]
+    // rho_tp1 = 2*logit_inv(rho_tilde_tp1) - 1
+
+    BMs[i] = BrownianMotion(i,
+			    order,
+			    rho_t,
+			    exp(log_sigma_x_t),
+			    exp(log_sigma_y_t),
+			    x_t,
+			    y_t,
+			    1.0);
+    double x_tp1 = BMs[i].get_x_T();
+    double y_tp1 = BMs[i].get_y_T();
+
+    x_t = x_tp1;
+    y_t = y_tp1;
+    log_sigma_x_t = log_sigma_x_tp1;
+    log_sigma_y_t = log_sigma_y_tp1;
+    rho_tilde_t = rho_tilde_tp1;
+    rho_t = rho_tp1;
+  }
+
+  gsl_rng_free(r_ptr);
  }
 
 

@@ -16,9 +16,9 @@
 #include <vector>
 
 int main(int argc, char *argv[]) {
-  if (argc < 6 || argc > 6) {
+  if (argc < 7 || argc > 7) {
     printf("You must provide input\n");
-    printf("The input is: \n\noutput file prefix;\nnumber particles to be used; \nnumber data points; \nnumber points for interpolator; \nfile name for interpolator; \n");
+    printf("The input is: \n\noutput file prefix;\nnumber particles to be used; \nnumber data points; \nnumber points for interpolator; \nfile name for interpolator; \nfile name for parameters\n");
     printf("It is wise to include the parameter values in the file name. We are using a fixed seed for random number generation.\n");
     exit(0);
   }
@@ -28,44 +28,40 @@ int main(int argc, char *argv[]) {
   int number_data_points = std::stod(argv[3]);
   int number_points_for_interpolator = std::stod(argv[4]);
   std::string input_file_name = argv[5];
+  std::string parameters_file_name = argv[6];
 
   std::string output_file = output_file_PREFIX +  ".csv";
 
   std::cout << "output_file = " << output_file << std::endl;
 
   omp_set_dynamic(0);
-  omp_set_num_threads(30);
+  omp_set_num_threads(20);
 
-  double sigma_2=0.00291518;
-  double phi=-1.38676;
-  double nu=5;
-  double tau_2=5.59013;
-  std::vector<double> L = {3.17564,
-			   2.85297, 4.22303,
-			   3.61173, 4.51855, 13.9496,
-			   -1.0784, 4.66776, 13.1338, 6.66533,
-			   8.85899, 1.16777, -5.07872, 16.8475, 12.4105,
-			   -7.05084, 2.30011, 4.42575, -1.69786, 6.34489, 0.222189,
-			   4.85171, 2.84438, -0.105236, -0.875338, 0.803392, 0.906027, 2.41978};
-
-  std::ifstream input_file(input_file_name);
-  std::vector<likelihood_point> points_for_kriging =
-    std::vector<likelihood_point> (number_points_for_interpolator);
-  std::vector<likelihood_point> points_for_interpolation = std::vector<likelihood_point> (1);
-
-  if (input_file.is_open()) {
-    for (unsigned i=0; i<points_for_kriging.size(); ++i) {
-      input_file >> points_for_kriging[i];
-      points_for_kriging[i].likelihood = log(points_for_kriging[i].likelihood);
-    }
-  }
+  std::ifstream parameters_file(parameters_file_name);
 
   parameters_nominal params_for_GP_prior = parameters_nominal();
-  params_for_GP_prior.sigma_2 = sigma_2;
-  params_for_GP_prior.phi = phi;
-  params_for_GP_prior.nu = nu;
-  params_for_GP_prior.tau_2 = tau_2;
-  params_for_GP_prior.lower_triag_mat_as_vec = L;
+  parameters_file >> params_for_GP_prior;
+  std::cout << params_for_GP_prior;
+  parameters_file.close();
+
+
+  std::ifstream input_file(input_file_name);
+  std::vector<likelihood_point> points_for_kriging = std::vector<likelihood_point> (0);
+  std::vector<likelihood_point> points_for_interpolation = std::vector<likelihood_point> (0);
+
+  if (input_file.is_open()) {
+    for (int i=0; i<number_data_points; ++i) {
+      likelihood_point current_lp = likelihood_point();
+      input_file >> current_lp;
+      
+      if (!std::isnan(current_lp.log_likelihood) &&
+	  !std::isinf(std::abs(current_lp.log_likelihood)) && 
+	  (current_lp.log_likelihood < 3.0) &&
+	  (current_lp.log_likelihood > -15.0)) {
+	points_for_kriging.push_back(current_lp);
+      }
+    }
+  }
 
   GaussianInterpolator GP_prior = GaussianInterpolator(points_for_interpolation,
 						       points_for_kriging,
@@ -259,42 +255,44 @@ int main(int argc, char *argv[]) {
 	      << "ess\n";
   mean_levels.close();
 
-//   // BASES COPY FOR THREADS START
-//   double dx = 1.0/500.0;
-//   double power = 1.0;
-//   double std_dev_factor = 1.0;
+  // BASES COPY FOR THREADS START
+  double dx = 1.0/600.0;
+  double power = 1.0;
+  double std_dev_factor = 1.0;
 
-//   double sigma_x = 0.5;
-//   double sigma_y = 0.2;
-//   double rho_basis = 0.8;
+  double sigma_x = 0.5;
+  double sigma_y = 0.5;
+  double rho_basis = 0.0;
+  double dx_likelihood = 0.003905;
 
-//   std::cout << "creating basis" << std::endl;
-//   BivariateGaussianKernelBasis basis_positive =
-//     BivariateGaussianKernelBasis(dx,
-// 				 rho_basis,
-// 				 sigma_x,
-// 				 sigma_y,
-// 				 power,
-// 				 std_dev_factor);
+  std::cout << "creating basis" << std::endl;
+  BivariateGaussianKernelBasis basis_positive =
+    BivariateGaussianKernelBasis(dx,
+				 rho_basis,
+				 sigma_x,
+				 sigma_y,
+				 power,
+				 std_dev_factor);
 
-//   int tid = 0;
-//   unsigned i = 0;
+  int tid = 0;
+  unsigned i = 0;
 
-//   std::cout << "copying bases vectors for threads as private variables" << std::endl;
-// #pragma omp parallel default(none) private(tid, i) shared(basis_positive)
-//   {
-//     tid = omp_get_thread_num();
+  std::cout << "copying bases vectors for threads as private variables" << std::endl;
+#pragma omp parallel default(none) private(tid, i) shared(basis_positive)
+  {
+    tid = omp_get_thread_num();
 
-//     private_bases = new BivariateGaussianKernelBasis();
-//     (*private_bases) = basis_positive;
+    private_bases = new BivariateGaussianKernelBasis();
+    (*private_bases) = basis_positive;
 
-//     printf("Thread %d: counter %d\n", tid, counter);
-//   }
-//   // BASES COPY FOR THREADS END
-  
+    printf("Thread %d: counter %d\n", tid, counter);
+  }
+  // BASES COPY FOR THREADS END
+
   for (unsigned tt=1; tt<N; ++tt) {
     observable_datum y_t = ys[tt];
     observable_datum y_tm1 = ys[tt-1];
+    std::vector<likelihood_point> points_to_add_to_interpolator = std::vector<likelihood_point> (0);
 
     std::vector<parameters> params_t_mean (params_tm1.size());
     for (unsigned ii = 0; ii<params_t_mean.size(); ++ii) {
@@ -312,7 +310,7 @@ int main(int argc, char *argv[]) {
 
     auto t1 = std::chrono::high_resolution_clock::now();
     unsigned i=0;
-#pragma omp parallel default(none) private(i) shared(GP_prior, lls, theta_t_mean, params_t_mean, N_particles) firstprivate(y_t, y_tm1, params)
+#pragma omp parallel default(none) private(i) shared(GP_prior, lls, theta_t_mean, params_t_mean, N_particles) firstprivate(y_t, y_tm1, params, dx, dx_likelihood)
     {
 #pragma omp for
       for (i=0; i<N_particles; ++i) {
@@ -321,11 +319,29 @@ int main(int argc, char *argv[]) {
 						  theta_t_mean[i],
 						  params_t_mean[i],
 						  GP_prior);
-	lls[i] = lp.likelihood;
 	double variance = GP_prior.prediction_variance(lp);
-	printf("Thread %d with address ' ' produces likelihood %f where &params=%p with uncertainty %f\n",
+	// if (std::isnan(variance) |
+	//     (std::abs(sqrt(variance)) > 1.40)) {
+
+	//   double log_likelihood = log_likelihood_OCHL(y_t,
+	// 					      y_tm1,
+	// 					      theta_t_mean[i],
+	// 					      params_t_mean[i],
+	// 					      private_bases,
+	// 					      dx,
+	// 					      dx_likelihood);
+
+	//   if (std::isnan(log_likelihood) || std::isinf(log_likelihood)) {
+	//     log_likelihood = -1.0 * std::numeric_limits<double>::infinity();
+	//   }
+
+	//   lp.log_likelihood = log_likelihood;
+	// }
+
+	lls[i] = lp.log_likelihood;
+	printf("Thread %d with address ' ' produces log likelihood %f where &params=%p with uncertainty %f\n",
 	       omp_get_thread_num(),
-	       lp.likelihood,
+	       lp.log_likelihood,
 	       &params,
 	       sqrt(variance));
       }
@@ -359,11 +375,11 @@ int main(int argc, char *argv[]) {
       ks[i] = gsl_ran_discrete(r_ptr, particle_sampler);
     }
     std::vector<likelihood_point> lps (N_particles);
-    
+
     // SAMPLING PARAMTERS AND VOLATILITIES START
     t1 = std::chrono::high_resolution_clock::now();
     unsigned m=0;
-#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, params_t_mean, NIWkernels_tm1, NIWkernels_t, GP_prior, lps) firstprivate(y_t, y_tm1, params)
+#pragma omp parallel default(none) private(m) shared(lls, N_particles, ks, r_ptr, log_weights, theta_tm1, theta_t, params_tm1, params_t, params_t_mean, NIWkernels_tm1, NIWkernels_t, GP_prior, lps, dx, dx_likelihood) firstprivate(y_t, y_tm1, params)
     {
 #pragma omp for
       for (m=0; m<N_particles; ++m) {
@@ -439,7 +455,7 @@ int main(int argc, char *argv[]) {
 				  y_tm1,
 				  params_t_sample,
 				  r_ptr);
-	
+
 	// mu update
 	gsl_vector * mu_not_update = gsl_vector_alloc(13);
 	gsl_vector_memcpy(mu_not_update, NIWcurrent.mu_not);
@@ -479,16 +495,35 @@ int main(int argc, char *argv[]) {
 	if (std::abs(lls[k] - log(1e-16)) <= 1e-16) {
 	  log_new_weight = log(1e-32);
 	} else {
-	  likelihood_point lp_for_sample = log_likelihood_OCHL(y_t,
-							       y_tm1,
-							       theta_t[m],
-							       params_t[m],
-							       GP_prior);
-	  log_new_weight =
-	    lp_for_sample.likelihood -
-	    lls[k];
+	  likelihood_point lp = log_likelihood_OCHL(y_t,
+						    y_tm1,
+						    theta_t[m],
+						    params_t[m],
+						    GP_prior);
+	  double variance = GP_prior.prediction_variance(lp);
+	  // if (std::isnan(variance) |
+	  //     (std::abs(sqrt(variance)-1.0) > 0.10)) {
 
-	  lps[m] = lp_for_sample;
+	  //   double log_likelihood = log_likelihood_OCHL(y_t,
+	  // 						y_tm1,
+	  // 						theta_t[m],
+	  // 						params_t[m],
+	  // 						private_bases,
+	  // 						dx,
+	  // 						dx_likelihood);
+
+	  //   if (std::isnan(log_likelihood) ||
+	  // 	std::isinf(log_likelihood)) {
+	  //     log_likelihood = -1.0 * std::numeric_limits<double>::infinity();
+	  //   }
+
+	  //   lp.log_likelihood = log_likelihood;
+	  // }
+
+	  log_new_weight =
+	    lp.log_likelihood - lls[k];
+
+	  lps[m] = lp;
 
 	  if (std::isinf(log_new_weight) || std::isnan(log_new_weight)) {
 	    log_new_weight = -1.0*std::numeric_limits<double>::infinity();
@@ -516,7 +551,7 @@ int main(int argc, char *argv[]) {
     std::cout << "OMP duration = " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
 	      << " milliseconds" << std::endl;
     // SAMPLING PARAMTERS AND VOLATILITIES END
-    
+
 
     auto max_weight_iter_ptr = std::max_element(std::begin(log_weights),
 						std::end(log_weights));

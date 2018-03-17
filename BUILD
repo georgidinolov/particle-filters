@@ -1,4 +1,21 @@
 cc_binary(
+	name = "generate-points-from-prior",
+	srcs = ["generate-points-from-prior.cpp"],
+	copts = ["-Isrc/brownian-motion",
+	      	 "-Isrc/multivariate-normal",
+	      	 "-Isrc/finite-element-igraph",
+		 "-Isrc/gaussian-interpolator",
+		 "-Isrc/igraph-0.7.1/include",
+		 "-Isrc/SV-with-leverage/src",
+		 "-Isrc/nlopt/api",
+		 "-fopenmp",
+		 "-O3"],
+ 	deps = [":DataTypes"],
+	linkopts = ["-lm", "-lgsl", "-lgslcblas", "-fopenmp"],		 
+)
+
+
+cc_binary(
 	name = "2d-stochastic-vol-full-beta-interpolator",
 	srcs = ["2d-stochastic-vol-full-beta-interpolator.cpp"],
 	copts = ["-Isrc/brownian-motion",
